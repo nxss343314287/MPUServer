@@ -1,0 +1,38 @@
+/*
+ * MPUThreadScheduler.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: w.j
+ */
+
+#include "MPU.h"
+
+int MPUThreadScheduler_initialize(MPUThreadScheduler *thread_scheduler)
+{
+
+		return true;
+}
+//�ͷ�
+
+
+int MPUThreadScheduler_free(MPUThreadScheduler *thread_scheduler)
+{
+
+
+		return true;
+}
+//��ͣ
+
+
+int MPUThreadScheduler_pause(MPUThreadScheduler *thread_scheduler)
+{
+
+		return true;
+}
+//��λ
+
+int MPUThreadScheduler_resume(MPUThreadScheduler *thread_scheduler)
+{
+
+		return true;
+}

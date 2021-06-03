@@ -1,0 +1,555 @@
+#include "cas_tmt.h"
+
+void tmt_ManualTrainIDProcess(byte modifyType,ushort destionation, ushort service, ushort serial, int car1, int car2, ushort logicalTrack,ushort oldDes, ushort oldService, ushort oldSerial, ushort oldLogcialTrack,byte isBogus)
+{
+     char *newTrainID=malloc(100);
+     char *oldTrainID=malloc(100);
+     if (isBogus)
+     {
+         if (modifyType == TMT_MODIFY_TRAINID)
+         {
+             //首先将目的地码+服务号+行程号组合成string类型的车次号
+             char * strDes = tmt_NumberToString(destionation, ThreeLength);
+             //Modified by lfc 20101114 服务号改3位
+             char * strService = tmt_NumberToString(service, ThreeLength);
+             //Modified end
+             char * strSerial = tmt_NumberToString(serial, TwoLength);
+             //除修改之外，均采用该参数作为车次号
+             sprintf(newTrainID,"%s%s%s",strDes,strService,strSerial);
+
+             strDes = tmt_NumberToString(oldDes, ThreeLength);
+             sprintf(oldTrainID,"%s%s","F",strDes);
+         }
+         else
+         {
+             char * strDes = tmt_NumberToString(destionation, ThreeLength);
+             sprintf(newTrainID,"%s%s","F",strDes);
+         }
+     }
+     else
+     {
+          //首先将目的地码+服务号+行程号组合成string类型的车次号
+          char * strDes = tmt_NumberToString(destionation, ThreeLength);
+          //服务号改3位
+          char * strService = tmt_NumberToString(service, ThreeLength);
+          char * strSerial = tmt_NumberToString(serial, TwoLength);
+          //除修改之外，均采用该参数作为车次号
+          sprintf(newTrainID,"%s%s%s",strDes,strService,strSerial);
+
+          strDes = tmt_NumberToString(oldDes, ThreeLength);
+          //服务号改3位
+          strService = tmt_NumberToString(oldService, ThreeLength);
+          strSerial = tmt_NumberToString(oldSerial, TwoLength);
+          sprintf(oldTrainID,"%s%s%s",strDes,strService,strSerial);
+     }
+     //解决虚假号不能删除问题
+     if (newTrainID != 0 &&(sizeof(newTrainID) == TrainIDLength||isBogus==0))
+     {
+         //组合车底号
+         int carNumber = car1 * 1000 + car2;
+         //判断操作类型，根据不同的操作类型，调用不同的方法
+         switch (modifyType)
+         {
+             case TMT_ADD_TRAINID:
+             {
+                  tmt_ManualAddTrainID(newTrainID, carNumber, (short)logicalTrack);
+                  break;
+             }
+             case TMT_DELETE_TRAINID:
+             {
+                  tmt_ManualDeleteTrainID(newTrainID, (short)logicalTrack);
+                  break;
+             }
+             case TMT_MODIFY_TRAINID:
+             {
+
+                  if (oldTrainID != 0 && sizeof(oldTrainID) == TrainIDLength)
+                  {
+                      tmt_ManualModifyTrainID(newTrainID, oldTrainID, (short)logicalTrack);
+                  }
+                  else if(oldTrainID != 0 &&strrchr(oldTrainID,'F'))
+                  {
+                      tmt_ManualModifyTrainID(newTrainID, oldTrainID, (short)logicalTrack);
+                  }
+                  else
+                  {
+                      ILOG("转换旧车次号出错！");
+                  }
+                  break;
+              }
+              case TMT_STEP_TRAINID:
+              {
+                  tmt_ManualStepTrainID(newTrainID, (short)logicalTrack, (short)oldLogcialTrack);
+                  break;
+              }
+              default:
+              {
+                  ILOG("接收到不可识别的车次号操作代码！");
+                  break;
+              }
+         }
+     }
+     else
+     {
+         ILOG("转换新车次号出错！");
+     }
+     free(newTrainID);
+     free(oldTrainID);
+}
+
+
+char *tmt_NumberToString(ushort number, byte length)
+{
+      char * str;
+      if (number > 0)
+      {
+           if (length == ThreeLength)        //
+           {
+                	str=malloc(3);
+                    if (number < 10)
+                    {
+                        sprintf(str,"%d%d%d",0,0,number);
+                    }
+                    else if (number >= 10 && number < 100)
+                    {
+                        sprintf(str,"%d%d",0,number);
+                    }
+                    else
+                    {
+                        sprintf(str,"%d",number);
+                    }
+                    free(str);
+           }
+           else if (length == TwoLength)
+           {
+                	str=malloc(2);
+                    if (number < 10)
+                    {
+                        sprintf(str,"%d%d",0,number);
+                    }
+                    else
+                    {
+                        sprintf(str,"%d",number);
+                    }
+                    free(str);
+           }
+
+       }
+       return str;
+}
+
+
+
+
+void tmt_ManualAddTrainID(char *newTrainID, int carNumber, short trackID)
+{
+            //TODO:CO的创建列车对象更改为人工创建列车对象接口
+            byte result;
+            ////首先创建列车对象
+            result=ats_co_tra_CreateTrain (db, newTrainID, DefaultData, carNumber);
+            //创建成功
+            //如果目的地码无效，创建失败
+            if (result == Success)
+            {
+                //设置列车类型=ITC
+                ats_co_tra_SetTrainType(db,newTrainID, TMT_ITC_TRAIN);
+                //将车次号与车底号关联
+                //人工创建时，如果carno用过，则将上面创建的车子删掉，同时给错误返回码
+                byte setFlag=ats_co_tra_SetCarNumber (db, newTrainID, carNumber);
+
+                if(!setFlag)
+                {
+                    ats_co_tra_DeleteTrain (db, newTrainID);
+                    tmt_io_ReturnCodeOut(CarNumberAlreadyExist);
+                    return;
+                }
+                //将车次号与索引号进行关联
+                int index = tmt_SearchNoTrainIDIndex(trackID);
+                ats_co_tra_SetIndex (db, newTrainID, index);
+                //add end
+
+                //将轨道与列车进行关联
+                ats_co_axt_AddAssociatedTrainId (db, newTrainID, trackID);
+
+                //如果关联成功
+                if (result == Success)
+                {
+                    //返回成功码
+                    tmt_io_ReturnCodeOut(result);
+                    //设置列车占用轨道
+                    ats_co_tra_SetOccupyTrackId (db, newTrainID, trackID);
+                    //进行车次号显示
+                    tmt_io_TrainIDShow(trackID, newTrainID,0);
+                    //人工创建车次号后发送给SICAS
+                    tmt_io_TrainMCOut(newTrainID, trackID);
+                }
+                //关联不成功
+                else
+                {
+                    tmt_io_ReturnCodeOut(result);
+                }
+            }
+            //创建不成功，返回创建错误码
+            else
+            {
+                tmt_io_ReturnCodeOut(result);
+            }
+}
+
+
+
+void tmt_ManualDeleteTrainID(char *trainID, short trackID)
+{
+     //获取列车当前所在轨道
+     int occupyTrackID;
+     ats_co_tra_GetOccupyTrackId (&occupyTrackID, db, trainID);
+     byte result = DeleteTrainFailed;
+     //TODO:删除列车对象时，CO会将车次号与轨道关联取消
+     tmt_tn_dh_TrainIDRelated(trainID, occupyTrackID,1);
+     //先删除当前显示的轨道与车次号的关联
+     //如果当前显示的轨道与实际的列车占用的轨道相同，再删除列车，删除实际轨道的显示
+     tmt_io_TrainIDShow(trackID, trainID, -1);
+     //如果轨道没有关联车次号，直接将发过来的轨道号作为参数发给LOW，关闭显示
+     if (occupyTrackID == -2)
+     {
+         result = Success;
+     }
+     tmt_io_TrainIDShow(occupyTrackID, trainID, -1);
+     if (trackID == occupyTrackID)
+     {
+         byte result1 = ats_co_tra_DeleteTrain (db, trainID);
+         if (result1)
+         {
+             result = Success;
+         }
+
+     }
+     //TODO:删除一个车次号后，需要检查该轨道是否还存在其他车次号
+     TrainIDs *relateTrainIDs;
+     int num;
+     ats_co_trt_GetAssociatedTrainId (relateTrainIDs, &num, db, trackID);
+     if (relateTrainIDs != 0 && num > 0)
+     {
+         //在该轨道上显示当前第一个车次号
+         tmt_io_TrainIDShow(trackID, relateTrainIDs->trainId, 0);
+     }
+     //返回操作码
+     tmt_io_ReturnCodeOut(result);
+}
+
+void tmt_ManualModifyTrainID(char *newTrainID, char *oldTrainID, short trackID)
+{
+             //获取旧车次号所在轨道
+             int  occupyTrackID;
+             ats_co_tra_GetOccupyTrackId (&occupyTrackID, db, oldTrainID);
+             //TODO:CO人工操作方法更改
+             //调用COCTrain方法进行车次号修改
+             byte result;
+             result = ats_co_tra_ManualChangeTrainId (db, oldTrainID, newTrainID, trackID);
+             //TODO:如果旧车次号不关联索引号，则需要将新车次号与索引号关联
+             int index;
+     		 ats_co_tra_GetIndex (&index, db, oldTrainID);
+             if (index==DefaultData ||index==NoTrain)
+             {
+                 //修改查找时需要的轨道号
+                 index = tmt_SearchNoTrainIDIndex(trackID);
+                 ats_co_tra_SetIndex (db, newTrainID, index);
+             }
+             //add end
+
+             //如果修改成功
+             if (result == Success || result == DestinationNotValid)
+             {
+                 tmt_io_ReturnCodeOut(result);
+                 //TODO:更改车次号后，CO会将车次号与轨道、计轴关联取消和设置
+                 //进行轨道关联
+
+
+                 //CO在ManualChangeTrainId中已经设置过
+
+                 tmt_tn_dh_TrainIDRelated(oldTrainID, occupyTrackID,-1);
+                 tmt_tn_dh_TrainIDRelated(newTrainID, occupyTrackID, 0);
+                 if (result == Success)
+                 {
+                     tmt_io_TrainIDShow(occupyTrackID, oldTrainID, -1);
+                     tmt_io_TrainIDShow(occupyTrackID, newTrainID, 0);
+                     //将车次号发送给SICAS
+                     tmt_io_TrainMCOut(newTrainID, occupyTrackID);
+
+                 }
+                 //先判断轨道类型
+
+                 int trackType = DefaultData;
+             	 ats_co_log_GetTrackType (&trackType, db, occupyTrackID);
+
+                 if (trackType==ConvertionTrack||trackType == StationTrack || trackType == StationTurnbackTrack || trackType == StationTriggerTrack)
+                 {
+                     //CTC 车如果没做过到站，触发到站
+                     tmt_TriggerStopStation(occupyTrackID, newTrainID, timeStamp);
+
+                 }
+             }
+
+             //修改不成功
+             else
+             {
+                 tmt_io_ReturnCodeOut(ModifyTrainFailed);
+             }
+}
+
+
+void tmt_TriggerStopStation(short trackID, char *TrainID, char *timestamp)
+{
+
+            //从CO获取列车属性
+            int trainType;
+            ats_co_tra_GetTrainType  (&trainType, db, TrainID);
+            //如果是CTC列车，则TMT需要调用TTA的方法
+            if (trainType == CTCTrain)
+            {
+                //定义列车事件=列车到站
+                //byte eventType = TrainArrival;
+                //从CO获取轨道关联站台号
+                int PTID05;
+                ats_co_tra_GetAssociatedPlatformId  (&PTID05, db, TrainID);
+                //从CO获取列车索引号
+                int trainIndex = DefaultData;
+                ats_co_tra_GetIndex (&trainIndex, db, TrainID);
+                //从trainID获得PTID
+                int assPTID;
+                ats_co_tra_GetAssociatedPlatformId  (&assPTID, db, TrainID);
+
+                //修改过后直接调用，调用TTA包方法进行列车到站处理
+                Datetime datetime_str;
+                time_t  t;
+                struct tm* now;
+                struct timeval tv;
+                gettimeofday(&tv,NULL);
+                t=tv.tv_sec;
+                now=localtime(&t);
+                printf("%04d-%02d-%02d %02d:%02d:%02d",now -> tm_year + 1900, now -> tm_mon + 1, now -> tm_mday, now -> tm_hour, now -> tm_min, now -> tm_sec);
+                datetime_str.day=now -> tm_mday;
+                datetime_str.month=now -> tm_mon + 1;
+                datetime_str.year=now -> tm_year + 1900;
+                datetime_str.second=now -> tm_sec;
+                datetime_str.minute=now -> tm_min;
+                datetime_str.hour= now -> tm_hour;
+               // tmt_TrainEventProcess(trainType, trainIndex, TrainID, PTID05, datetime_str);
+                ILOG("TMT:调用TTA包进行列车到站处理，所在轨道号=%s,列车车次号=%d,时间:%s", trackID,TrainID ,datetime_str);
+            }
+}
+
+void tmt_ManualStepTrainID(char *trainID, short newTrackID, short oldTrackID)
+{
+
+      // 修改车次号步进处理
+       byte result = Success;
+       //获取车次号所在轨道
+       int occupyTrackID;
+       ats_co_tra_GetOccupyTrackId (&occupyTrackID, db, trainID);
+       if (occupyTrackID == NoTrain)
+       {
+           ////返回操作码
+           tmt_io_ReturnCodeOut(TrainNotFound);
+           return;
+
+       }
+
+       //delete/add合并处理
+       tmt_tn_dh_TrainIDRelatedAddDelete(occupyTrackID, newTrackID, trainID);
+
+       ////将列车与旧轨道号删除关联
+       tmt_tn_dh_TrainIDRelated(occupyTrackID, trainID, -1);
+
+       ////将列车与新轨道号关联
+       tmt_tn_dh_TrainIDRelated(trainID, newTrackID,1);
+       //TODO:步进之后再判断目的地码是否有效
+       int isValid = -1;
+       int res;
+       ats_co_log_DestinationIsValid (&isValid, db, newTrackID, trainID);
+
+       if (res)
+       {
+           if (!isValid)
+           {
+               result = DestinationNotValid;
+           }
+           else
+           {
+               result = Success;
+           }
+       }
+       else
+       {
+           result = TrainNotFound;
+
+       }
+       ////返回操作码
+       tmt_io_ReturnCodeOut(result);
+}
+
+int tmt_SearchNoTrainIDIndex(short trackID)
+{
+          int index = DefaultData;
+          int i;
+          //首先从TrainPosition数组中查找没有车次号的所有索引
+          int *noTrainIDIndex=malloc(TrainMax);
+          for (i = 0; i < TrainMax; i++)
+          {
+        	  TrainIDs *trainIDs;
+        	  int num;
+        	  TrainPostion trainpostioninfo;
+        	  ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, i);
+              ats_co_tra_GetTrainIds (trainIDs, &num, db);
+
+              //如果索引号不关联车次号
+              if(trainIDs==0)
+              {
+                  noTrainIDIndex[i] = trainpostioninfo.index;
+
+              }
+          }
+          //查找这些索引所在的轨道与参数轨道是否在同一个计轴上，如果在同一个计轴上，就认为是同一个列车
+          int axle1;
+          int axle2;
+          ats_co_log_GetAssociatedAxleCounterId (&axle1, db, trackID);
+
+          for (i = 0; i < TrainMax; i++)
+          {
+        	  TrainPostion trainpostioninfo;
+        	  ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, i);
+              if (noTrainIDIndex[i] != 0)
+              {
+                  if (trainpostioninfo.position!=DefaultData)
+                  {
+                      ats_co_log_GetAssociatedAxleCounterId (&axle2, db, trainpostioninfo.position);
+                      if (axle1 == axle2)
+                      {
+                          index = noTrainIDIndex[i];
+                          ILOG("关联索引号%d--%d",index,noTrainIDIndex[i]);
+                          break;
+                      }
+
+                  }
+
+              }
+          }
+          free(noTrainIDIndex);
+
+          return index;
+
+}
+
+int tmt_ManualAllTrainID(byte dm, byte sm, byte tm, byte fm)
+{
+    int carNumber = 0;
+    int crewNumber = 0;
+    int trackID = 0;
+    int trainType = 0;
+    int deviation = 0;
+    int driveMode = 0;
+    int i;
+    //如果LOW请求列车位置信息以及列车状态信息，则将系统中所有列车的信息发送给LOW
+    if (tm && sm)
+    {
+        //从系统中获取所有的列车信息
+    	TrainIDs *trainIDs=malloc(sizeof(TrainIDs));
+    	int num;
+    	ats_co_tra_GetTrainIds (trainIDs, &num, db);
+        printf("ats_co_tra_GetTrainIds success,num=[%d]................\n",num);
+        //如果系统中已经存在列车车次号
+        if (num > 0)
+        {
+        	AllTrainData_Struct *allTrain=malloc(sizeof(AllTrainData_Struct)*40);
+        	AllTrainData_Struct *ptr=allTrain;
+            for(i=0;i<num;i++)
+            {
+                //如果为虚假车次号
+                if (strchr(trainIDs->trainId,'F'))
+                {
+                	ptr->trainIDFault= TrainIDFaultBogus;
+                    char *str_destination=malloc(7);
+                    strncpy(str_destination,trainIDs->trainId+1,7);
+                    ptr->destination=atol(str_destination);
+                    free(str_destination);
+                }
+                else
+                {
+                	ptr->trainIDFault = TrainIDFaultNormal;
+                    //根据列车车次号获取目的地码、服务号以及序列号
+                	char *tmp_p=trainIDs->trainId;
+                	char *str_destination=malloc(4);
+                	strncpy(str_destination,tmp_p+0,3);
+                	ptr->destination=atol(str_destination);
+                	free(str_destination);
+                	char *str_service=malloc(3);
+                	tmp_p=trainIDs->trainId+3;
+                	strncpy(str_service,tmp_p,2);
+                	ptr->service=atol(str_service);
+                	free(str_service);
+                	char *str_serial=malloc(3);
+                	tmp_p=trainIDs->trainId+6;
+                	strncpy(str_serial,tmp_p,2);
+                	ptr->serial=atol(str_serial);
+                	free(str_serial);
+                }
+
+                //获取该车次号其他相关信息
+
+                ats_co_tra_GetCarNumber (&carNumber, db, trainIDs->trainId);
+                ats_co_tra_GetCrewNumber (&crewNumber, db, trainIDs->trainId);
+                ats_co_tra_GetOccupyTrackId (&trackID, db, trainIDs->trainId);
+                ats_co_tra_GetTrainType  (&trainType, db, trainIDs->trainId);
+                ats_co_tra_GetDeviationTime (&deviation, db, trainIDs->trainId);
+
+                if (crewNumber != DefaultData)
+                {
+                	ptr->driver = (ushort)crewNumber;
+                }
+
+                if (carNumber != DefaultData)
+                {
+                	ptr->car1 = carNumber / 1000;
+                	ptr->car2 = carNumber % 1000;
+                }
+                if (trackID < 0)
+                {
+                	ptr->logicalSection = 0;
+                }
+                else
+                {
+                	ptr->logicalSection = (ushort)trackID;
+
+                }
+
+                ptr->warpTime = (short)deviation;
+                ptr->trainStatus = (byte)trainType;
+                ptr->driveMode = driveMode;
+
+                //以下与IO约定，在数组中直接赋0
+                ptr->originComponent = 0;
+                ptr->originMachine = 0;
+                trainIDs++;
+                ptr++;
+                //所有列车如果超过40个车,长度会超过1024，所以40个一组，传给IO
+                if(num>40&&ptr==0)
+                {
+
+                	adapter_tmt_send_AllTrainDataStruct(machineNO_default, 1, allTrain, 40);
+                	printf("adapter_tmt_send_AllTrainDataStruct success\n");
+                	ptr=allTrain;
+                }
+            }
+            adapter_tmt_send_AllTrainDataStruct(machineNO_default, 1, allTrain, 40);
+            printf("adapter_tmt_send_AllTrainDataStruct success\n");
+            free(allTrain);
+        }
+        free(trainIDs);
+    }
+    return 0;
+}
+
+
+
+
+

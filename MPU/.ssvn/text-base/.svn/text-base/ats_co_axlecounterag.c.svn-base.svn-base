@@ -1,0 +1,47 @@
+/*******************************************************************
+	filename：							ats_co_axlecounterag.c
+	author：								
+	create data：						2011-6-16
+	description：						AxleCounter表操作方法实现
+	modify history：              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+int ats_co_AxleCounterMsgSetDB(sqlite3 *db, ats_co_AxleCounterMsg *message)
+{				
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+	
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+					
+	sprintf(sqlstr, "update AxleCounter set AxleCounterFault = '%d',FreeStatus = '%d' where AxleCounterID = '%d'",
+					message->axleCounterFault,message->freeStatus,message->axleCounterId);	 	 	
+					
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	printf("SQL: ret=%d, %s while running ats_co_AxlCounterMsgSetDB\n", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		printf("SQLerror: %s while running ats_co_AxlCounterMsgSetDB\n", errMsg);
+		return -1;
+	}					
+	return 0;
+}
+
+
+int ats_co_AxleCounterMsgGetDB(sqlite3 *db, ats_co_AxleCounterMsg *message)
+{
+	
+	return 0;
+}

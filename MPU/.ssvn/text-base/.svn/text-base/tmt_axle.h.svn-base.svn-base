@@ -1,0 +1,51 @@
+/***************************************************************//**
+   @file                           tmt_axle.h
+   @author                         zhangxy
+   @date                           2011-11-16
+   @brief                          client of ats
+   @version                        1.0
+   @historyhead{author,            data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-05-05,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#ifndef __TMT_TRAIN_STEP_H__
+#define __TMT_TRAIN_STEP_H__
+
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <limits.h>
+#include "tmt_com.h"
+
+#ifdef  __cplusplus
+	extern "C" {
+#endif
+
+
+
+int tmt_axl_AxleOccpyProcess(const int axleID, int physicalFree);
+int tmt_axl_ConvertionAxleProcess(const int axle, const int freeStatus);
+int tmt_axl_StationAxleProcess(const int axleID);
+int tmt_axl_DepartureAxleProcess(const int axleID,const int direction);
+int tmt_axl_PrestationAxleProcess(const int axleID);
+int ats_axl_TriggerAxleProcess(const int axleID, int dwellTime);
+
+
+
+#ifdef  __cplusplus
+	}
+#endif
+
+#endif
+
+
+

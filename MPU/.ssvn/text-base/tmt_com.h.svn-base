@@ -1,0 +1,146 @@
+#ifndef _COMMON_H_
+#define _COMMON_H_
+
+/* System header files */
+#include <limits.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "public.h"
+#include "../CO/ats_co_sql.h"
+#include "../log.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+#define TMT_CTC_OCCUPY 2
+#define TMT_ITC_OCCUPY 3
+#define TMT_IXL_OCCUPY 1
+#define TMT_OCCUPY 0
+#define TMT_DEFAULT_DATA -1
+#define TMT_TRAIN_START 0
+#define TMT_TRAIN_ARRIVAL 1
+#define TMT_CLEAR 1
+#define TMT_CTC_TRAIN 3
+#define TMT_ITC_TRAIN 2
+#define TMT_DEPARTURE_TRACK 5
+#define TMT_CONVERTION_TRACK 0
+#define TMT_STATION_TRACK 4
+#define TMT_STATION_TRIGGER_TRACK 6
+#define TMT_TURNBACK_TRACK 2
+#define TMT_STATION_TURNBACKTRACK 7
+
+#define TMT_DEPARTURE_TRACK_UP 51
+#define TMT_DEPARTURE_TRACK_DOWN 52
+#define TMT_PRE_STATION_TRACK 8
+#define TMT_TRIGGER_TRACK 9   /*������*/
+
+#define TMT_NO_DIRECTION 10
+#define TMT_LOGICAL_FREE 11
+#define TMT_ITC_OCCUPIED 3      /*add*/
+#define TMT_CTC_OCCUPIED 2
+#define TMT_ATP_FREE 13
+#define TMT_PRE_TRIGGER_TRACK 14
+#define TMT_SUCCESS 15
+#define TMT_TRAINID_ALREADYEXIT 16
+#define TMT_INDEX_ALREADYEXIT 17
+#define TMT_CARNUMBER_ALREADYEXIT 18
+#define TMT_AXLE_NODIRECTION -3
+#define TMT_DRIVE_RM 1
+
+#define TMT_TRAINID_NULL 1
+#define TMT_TRAINID_FAULT 0
+#define TMT_TRAINID_NORMAL 2
+#define TMT_TRAINID_CLOSEF 3
+#define TMT_MAX_TRANSATION 85
+
+
+int tmt_dir_enterline;
+int tmt_dir_exitline;
+int tmt_first_train_index ;
+int tmt_des_max;
+int tmt_sc_max;
+int tmt_sr_max;
+int tmt_crew_max;
+int tmt_line_max;
+int tmt_car_ma;
+int tmt_des_leh;
+int tmt_sev_leh;
+int tmt_sei_leh;
+int tmt_track_begin;
+int tmt_track_end;
+int ptid;
+int tmt_inr_AllData;
+int tmt_inr_ModifiyNO;
+int tmt_block_cbtc;
+int tmt_block_circuit;
+int tmt_ele_track;
+int tmt_ele_tn_status;
+int tmt_ele_tn_position;
+int tmt_ele_axle;
+int tmt_ele_point;
+int tmt_ele_crossing;
+int oldAtpVacancy;
+int tmt_atp_valid;
+int tmt_trainID_Length;
+int disposalID;
+
+
+typedef struct
+{
+	int index;
+    int internal;
+    int telegramType;
+    int logicalFree;
+    int atpAvailable;
+    int atpVacancy;
+    int freeStatus;
+}CoDataForTmt;
+
+/*
+typedef struct 
+{
+	int day;
+	int month;
+	int year;
+	int second;
+	int minute;
+	int hour;
+}Datetime;
+*/
+
+
+
+typedef struct
+{
+        int index;
+        int position;
+        int driverMode;
+        int crewNo;
+        int speed;
+        int oldSpeed;
+        int isFirstOrNo;
+        int controlLevel;
+        int modifiedTrackNo;
+        int modifiedPtrackNo;
+        int modifiedPosition;//1:����
+
+}trainPosition;
+
+sqlite3 *db;
+trainPosition *trainPositions;
+
+
+
+#ifdef __cplusplus
+	}
+#endif
+
+#endif

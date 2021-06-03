@@ -1,0 +1,191 @@
+#include "cas_tmt.h"
+
+
+int tmt_axl_AxleOccpyProcess(const int axleID, int physicalFree)
+{
+    int axleType;
+    //ats_co_axl_GetAxleType();
+    switch(axleType)
+    {
+       case TMT_CONVERTION_TRACK:
+       {
+    	   tmt_axl_ConvertionAxleProcess(axleID, physicalFree);
+          break;
+       }
+       case TMT_STATION_TRACK || TMT_STATION_TRIGGER_TRACK||TMT_TURNBACK_TRACK||TMT_STATION_TURNBACKTRACK:
+       {
+          tmt_axl_StationAxleProcess(axleID);
+          break;
+       }
+       
+       case TMT_DEPARTURE_TRACK:
+       case TMT_DEPARTURE_TRACK_UP:
+       case TMT_DEPARTURE_TRACK_DOWN:
+       {
+           //tmt_axl_DepartureAxleProcess();
+           break;
+       }
+       case TMT_PRE_STATION_TRACK:
+       {
+          // tmt__axl_PrestationAxleProcess();
+           break;
+       }
+       
+       case TMT_TRIGGER_TRACK:
+       {
+    	   ats_axl_TriggerAxleProcess(axleID, 1);
+           break;
+       }
+       default :
+          break;
+    
+    }
+    return 0;
+
+
+}
+
+int tmt_axl_ConvertionAxleProcess(const int axle, const int freeStatus)
+{
+	 int direction;
+     //ats_co_axl_GetDirectionByRoute();
+     if(direction==tmt_dir_enterline)
+     {
+        if(freeStatus ==TMT_OCCUPY)
+        {
+        	//Datetime tm;
+           // ats_atr_TMTTrainEventProcess(TMT_TRAIN_START, TMT_DEFAULTDATA, 0, int PTID, tm);
+            //TODO:
+        }
+     }
+     else
+     {
+         if(direction==tmt_dir_exitline)
+         {
+             if(freeStatus ==TMT_CLEAR)
+             {
+                //ats_co_axl_GetAssociatedTrainId();
+               // ats_co_tra_SetTrackingType();
+             }
+         }
+     }
+     return 0;
+
+}
+
+
+int tmt_axl_StationAxleProcess(const int axleID)
+{
+   int eventhandle;
+   TrainIDs *associatedTrainId;
+   int num;
+   ats_co_axt_GetAssociatedTrainId (associatedTrainId, &num, db, axleID);
+   if(associatedTrainId)
+   {
+       int PTID_axle;
+       int PTID_train;
+       int index;
+       ats_co_log_GetAssociatedPlatformId(&PTID_axle, db, axleID);
+       ats_co_log_GetAssociatedPlatformId (&PTID_train, db, axleID);
+       ats_co_tra_GetIndex(&index, db, associatedTrainId->trainId);
+       if(PTID_axle==PTID_train)
+       {
+
+          ats_co_tra_GetTrainEventHandle(&eventhandle, db,associatedTrainId->trainId);
+       
+       }
+       Datetime eventTime;
+       ats_atr_FromTMTTrainEventProcess(eventhandle,index, associatedTrainId->trainId,PTID_train, eventTime);
+       return 0;
+   }
+   ILOG("no trainid\n");
+   return 0; 
+}
+
+
+
+
+int tmt_axl_DepartureAxleProcess(const int axleID,const int direction)
+{
+     TrainIDs *associatedTrainID;
+     int num;
+     ats_co_axt_GetAssociatedTrainId (associatedTrainID->trainId,&num, db, axleID);
+     if(associatedTrainID!=0)
+     {
+         int axle_Type;
+         //ats_co_axl_GetAxleType();
+         if(TMT_DEPARTURE_TRACK!=axle_Type)
+         {
+             int direction_axl;
+             ats_co_log_GetDirection (&direction_axl, db, axleID);
+             if(direction_axl==direction)
+             {
+            	 Datetime tm;
+                // ats_atr_DepartureCallTTA(axleID, associatedTrainID->trainId, tm);
+             }
+         }
+     }
+     ILOG("no trian\n");
+     return 0;
+
+}
+
+
+
+
+int tmt_axl_PrestationAxleProcess(const int axleID)
+{
+	 int platformid;
+	 int autoState;
+	 int enforceState;
+	 int dwellTime;
+	 ats_co_log_GetAssociatedPlatformId (&platformid, db, axleID);
+     if(!ats_co_pla_GetAutoState (&autoState, db, platformid))
+     {
+        if(!ats_co_pla_GetEnforceState (&enforceState, db, platformid))
+        {
+             return 0;
+        }
+        ats_axl_TriggerAxleProcess(axleID, dwellTime);
+     }
+     return 0;
+}
+
+
+
+int ats_axl_TriggerAxleProcess(const int axleID, int dwellTime)
+{
+    TrainIDs *associatedTrainID;
+    int num;
+    ats_co_axt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+     if(associatedTrainID==0)
+     {
+          ILOG("no trainID!/n");
+     }
+     else
+     {
+    	 /*
+         if(ats_co_tra_GetTrainActiveStatus())
+         {
+        	  Datetime trggerTime;
+              ats_ars_add_requirement(associatedTrainID, tmt_ele_point, axleID, trggerTime, dwellTime);
+         }
+         */
+     }
+     return 0; 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

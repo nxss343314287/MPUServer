@@ -1,0 +1,38 @@
+/*
+ * MPUCommon.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: root
+ */
+#include "MPUCommon.h"
+
+unsigned long int get_time_msecond(void)
+{
+    time_t t;
+    struct tm * now;
+    struct timeval tv;
+    int msec;
+
+    gettimeofday(&tv, NULL);
+    t = tv.tv_sec;
+    now = localtime(&t);
+
+    msec = (now->tm_hour * 60 * 60  + now->tm_min * 60 + now->tm_sec) * 1000 + tv.tv_usec/1000;
+    return (unsigned long int)msec;
+}
+
+
+void get_time_string(char* curtime)
+{
+    time_t t;
+    struct tm * now;
+    struct timeval tv;
+    char ptime[32] = {0};
+
+    gettimeofday(&tv, NULL);
+
+    now = localtime(&t);
+    sprintf(ptime, "%02d:%02d:%02d.%ld",now->tm_hour,now->tm_min,now->tm_sec,tv.tv_usec);
+
+    strncpy(curtime, ptime, 32);
+}

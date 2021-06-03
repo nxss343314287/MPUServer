@@ -1,0 +1,49 @@
+/***************************************************************//**
+   @file                           tmt_io_interface.h
+   @author                         zhangxy
+   @date                           2011-11-16
+   @brief                          client of ats
+   @version                        1.0
+   @historyhead{author,            data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-05-05,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#ifndef __TMT_IO_INTERFACE_H__
+#define __TMT_IO_INTERFACE_H__
+
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <limits.h>
+#include "tmt_com.h"
+
+#ifdef  __cplusplus
+	extern "C" {
+#endif
+
+int tmt_io_UpdateProcess(CoDataForTmt * dataStruct);
+int tmt_io_NewTrainID(int PTID, char * oldTrainID, char * trainID);
+int tmt_io_TrainIDShow (const int trackID, char * trainID, int showOrNo);
+int tmt_io_TrainTime(const int ptid, char * trainID, int dwellTime, int deviationTime);
+int tmt_io_TrainMCOut(char * trainID, const int trackID);
+
+
+
+#ifdef  __cplusplus
+	}
+#endif
+
+#endif
+
+
+
+

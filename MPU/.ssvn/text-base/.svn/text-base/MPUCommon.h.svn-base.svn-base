@@ -1,0 +1,19 @@
+/*
+ * MPUCommon.h
+ *
+ *  Created on: 2011-12-20
+ *      Author: root
+ */
+
+#ifndef MPUCOMMON_H_
+#define MPUCOMMON_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+unsigned long int get_time_msecond();
+void get_time_string(char* curtime);
+
+#endif /* MPUCOMMON_H_ */

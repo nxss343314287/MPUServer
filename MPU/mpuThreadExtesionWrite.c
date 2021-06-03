@@ -1,0 +1,133 @@
+/*******************************************************************
+filename      mpuExtesionWrite.c
+author        zs
+created date  2012-11-3
+description   copy an additional replay_db for write_phread and refresh replay_db
+warning
+modify history
+    author        date        modify        description
+*******************************************************************/
+
+#include"include/MPU.h"
+
+extern int replay_writethead_can_import_db;
+extern char replay_import_result;
+int connect_oracle_flag = 0;
+static void *
+mpuExtesionWrite_running(void *arg)
+{
+	MPU *mpu = (MPU *) arg;
+	while (TRUE)
+	{
+
+	mpuThreadSyncMutex_lock(&mpu->pMPUExtesionWrite->extesionwrite_mutex);
+	if(replay_writethead_can_import_db == 1)
+	{
+
+		unsigned long long int starttime = get_time_msecond();
+
+		sqlite3 *replay_db_hd = 0;
+		int k = sqlite3_open(ATS_IMPORTK_DB_FOR_REPLAY_NAME, &replay_db_hd);
+			if(k == 0)
+				DLOG("open sqlite3_repalydb_hd sucess!\n");
+			else
+			{
+				DLOG("open sqlite3_repalydb_hd failed! error=%d\n",k);
+				//DLOG("open sqlite3_repalydb_hd failed! error=%d",k);
+				mpuThreadSyncMutex_unlock(&mpu->pMPUExtesionWrite->extesionwrite_mutex);
+				return NULL;
+			}
+			//DLOG("write-thread start import data from sqlite3-replaydb(in hard-disk) to oracle");
+			if(connect_oracle_flag == 0)
+			{
+				int rc = ats_co_import_Connect_to_Oracle ("ATSForSZL2", "CASForSZL2", "CASForSZL2");
+				if(rc != -1)
+					connect_oracle_flag = 1;
+				else
+				{
+
+					DLOG("open Connect_to_Oracle ATSForSZL2 failed! error=%d\n",rc);
+					//DLOG("open sqlite3_repalydb_hd failed! error=%d",k);
+					mpuThreadSyncMutex_unlock(&mpu->pMPUExtesionWrite->extesionwrite_mutex);
+					return NULL;
+				}
+			}
+			ILOG("T_INTERLOCKDATA Updata start");
+			//ats_co_import_S2O_ImportData_for_tableName (replay_db_hd, "T_INTERLOCKDATA",0);//1:table+data;0:data
+			//ats_co_import_S2O_ImportData_for_tableName (replay_db_hd, "T_TMTDATA",0);
+			replay_import_result =ats_co_import_S2O_ImportData_for_replayInterlock(replay_db_hd);
+			ILOG("T_INTERLOCKDATA Updata end,result=%d",replay_import_result);
+			replay_import_result =ats_co_import_S2O_ImportData_for_replayTMT(replay_db_hd);
+			ILOG("T_TMTDATA Updata end,result=%d",replay_import_result);
+			//ats_co_import_S2O_ImportData_for_all (replay_db_hd, "orcl.nriet", "ATSSQL", "ATSSQL",1);//1:table+data;0:data
+			//DLOG("write-thread finish import data from sqlite3-replaydb(in hard-disk) to oracle");
+			ats_co_import_update_cas_status();
+			printf("write-thread finish import data from sqlite3-replaydb(in hard-disk) to oracle!\n");
+
+			sqlite3_close(replay_db_hd);
+
+			if(replay_import_result==1)
+			replay_writethead_can_import_db = 0;
+
+			unsigned long long int endtime = get_time_msecond();
+			DLOG("write-thread spend %lld mssend to import db!",endtime-starttime);
+			ats_co_import_DisConnect_to_Oracle();
+			connect_oracle_flag = 0;
+
+		} // end if
+		mpuThreadSyncMutex_unlock(&mpu->pMPUExtesionWrite->extesionwrite_mutex);
+		usleep(1000);
+		return NULL;
+
+	} // end  while
+	return NULL;
+}
+
+MPUThreadExtesionWrite* mpuThreadExtesionWrite_initialize(MPU *mpu)
+{
+	int result;
+	mpu->pMPUExtesionWrite = malloc(sizeof(MPUThreadExtesionWrite));
+	memset(mpu->pMPUExtesionWrite, 0, sizeof(MPUThreadExtesionWrite));
+
+//	pthread_attr_t attr;
+//	attr.
+//	pthread_attr_setstack();
+	//1.create thread mutex
+	mpuThreadSyncMutex_create(&mpu->pMPUExtesionWrite->extesionwrite_mutex);
+	//2.create receiver thread
+	result = pthread_create(&mpu->pMPUExtesionWrite->MPUThreadExtesionWriteThread, NULL,
+			mpuExtesionWrite_running, mpu);
+	//receiver_thread(mpu);
+	if(result == 0)
+	{
+		return mpu->pMPUExtesionWrite;
+	}
+	else
+	{
+		return NULL;
+
+	}
+}
+
+
+int mpuThreadExtesionWrite_free(MPUThreadExtesionWrite *thread_extesionwrite)
+{
+	ats_co_import_DisConnect_to_Oracle();
+	mpuThreadSyncMutex_destroy(&thread_extesionwrite->extesionwrite_mutex);
+	return true;
+}
+
+
+
+int mpuThreadExtesionWrite_pause(MPUThreadExtesionWrite *thread_extesionread)
+{
+
+		return true;
+}
+
+
+int mpuThreadExtesionWrite_resume(MPUThreadExtesionWrite *thread_extesionread)
+{
+
+		return true;
+}

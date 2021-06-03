@@ -1,0 +1,199 @@
+/*******************************************************************
+ filename      mpu.c
+ author        root
+ created date  2012-1-9
+ description   specifications of implemented functions
+ warning
+ modify history
+ author        date        modify        description
+ *******************************************************************/
+
+
+
+#include "include/MPU.h"
+#include "../log.h"
+#include <semaphore.h>
+sqlite3 *mpuDB;
+
+#define   SEM_NAME_NOTIFYMAIN    "mpu2main"
+sem_t * semofmpu2main;
+
+const char *  LOG_NAME_MPU	= "MPU.INIT";
+
+
+int
+mpu_initialize(MPU *pMPU, sqlite3 *db, log4c_category_t *log)
+{
+  //firstly,we should initial database handle and log4c category
+  pMPU->pLogger=log;
+  pMPU->pDB=db;
+
+	mpuThreadSyncMutex_create(&pMPU->log_mutex);
+
+  //allocate memory resource for MPU Center structure
+  mpuThreadSyncMutex_lock(&pMPU->log_mutex);
+  pMPU->pMPUCenter=mpuCenter_initialize(pMPU->pMPUCenter);
+  mpuThreadSyncMutex_unlock(&pMPU->log_mutex);
+
+  //start MPU Receiver thread
+  pMPU->pMPUReceiver=mpuReceiver_initialize(pMPU);
+  if(pMPU->pMPUReceiver == NULL)
+	  return false;
+  //start MPU Analyzer thread
+  pMPU->pMPUAnalyzer=mpuAnalyzer_initialize(pMPU);
+  if(pMPU->pMPUAnalyzer == NULL)
+  	  return false;
+  //start master slave synchronization thread
+  pMPU->pMPUMasterSlaveSync=mpuMasterSlaveSync_initialize(pMPU);
+  if(pMPU->pMPUMasterSlaveSync == NULL)
+  	  return false;
+
+  pMPU->pMPUExtesionRead=mpuThreadExtesionRead_initialize(pMPU);
+  if(pMPU->pMPUExtesionRead == NULL)
+	  return false;
+
+  pMPU->pMPUExtesionWrite=mpuThreadExtesionWrite_initialize(pMPU);
+  if(pMPU->pMPUExtesionWrite == NULL)
+  	  return false;
+
+  //pMPU->pMPUSender = malloc(sizeof(MPUSender));
+  //memset(pMPU->pMPUSender,0,sizeof(MPUSender));
+  //mpuSender_initialize(pMPU->pMPUSender);
+
+  //We can monitor status of all threads and get parameters of working threads
+  //by accessing information of threads which have registered in registration list.
+  //If some threads are not running	correctly,we must to kill or restart the thread.
+  //This thread scheduler also can initialize the working threads of MPU.
+
+//  pMPU->pThreadScheduler=mpuThreadScheduler_initialize(pMPU->pThreadScheduler);
+  if(pMPU->pMPUCenter->pMasterSlaveSyncInfo->iMPUMasterSlaveID == MASTER)
+	  ILOG( "<%s>MPU initial role is: MASTER", LOG_NAME_MPU);
+  else
+	  ILOG( "<%s>MPU initial role is: SLAVE", LOG_NAME_MPU);
+
+  return true;
+}
+//�ͷ�MPU
+
+int
+mpu_free(MPU *pMPU)
+{
+	if(pMPU->pMPUExtesionRead != NULL)
+	{
+		mpuThreadExtesionRead_free(pMPU->pMPUExtesionRead);
+	    free(pMPU->pMPUExtesionRead);
+	}
+
+	if(pMPU->pMPUExtesionWrite != NULL)
+	{
+		mpuThreadExtesionWrite_free(pMPU->pMPUExtesionWrite);
+		free(pMPU->pMPUExtesionWrite);
+	}
+
+  //free master slave synchronization thread
+  if(pMPU->pMPUMasterSlaveSync != NULL)
+  {
+  mpuMasterSlaveSync_free(pMPU->pMPUMasterSlaveSync);
+  free(pMPU->pMPUMasterSlaveSync);
+  }
+  //free MPU Receiver thread
+  if(pMPU->pMPUReceiver != NULL)
+  {
+  mpuReceiver_free(pMPU->pMPUReceiver);
+  free(pMPU->pMPUReceiver);
+  }
+  //free MPU Analyzer thread
+  if(pMPU->pMPUAnalyzer != NULL)
+  {
+  mpuAnalyzer_free(pMPU->pMPUAnalyzer);
+  free(pMPU->pMPUAnalyzer);
+  }
+  //free MPU Sender thread
+  //MPUSender_free(pMPU->pMPUSender);
+  //free MPU Scheduler thread
+//  mpuThreadScheduler_free(pMPU->pThreadScheduler);
+//  free(pMPU->pThreadScheduler);
+  //free MPU Center area
+  mpuCenter_free(pMPU->pMPUCenter);
+  free(pMPU->pMPUCenter);
+
+   if(&pMPU->log_mutex!=NULL)
+	 mpuThreadSyncMutex_destroy(&pMPU->log_mutex);
+  return true;
+}
+//
+
+int
+mpu_start(MPU *pMPU, sqlite3 *db, log4c_category_t *log)
+{
+	int result = false;
+	result = mpu_initialize(pMPU, db, log);
+	if(result == true)
+	{
+		semofmpu2main = sem_open(SEM_NAME_NOTIFYMAIN,0);
+		if(semofmpu2main == SEM_FAILED)
+		{
+			ELOG( "<%s>MPU open semofmpu2main failed!", LOG_NAME_MPU);
+			mpu_free(pMPU);
+			return false;
+		}
+		else
+		{
+			sem_post(semofmpu2main);
+			DLOG("<%s>mpu start working, notify main sucess!",LOG_NAME_MPU);
+			return true;
+		}
+	}
+	else
+	{
+		mpu_free(pMPU);
+		ELOG("<%s>mpu start error,thread can not work!",LOG_NAME_MPU);
+		return false;
+	}
+}
+//int
+//main(int argv, char *argc[])
+//{
+//  int rc;
+//  MPU myMPU;
+//
+//  log4c_init();
+//  log_category_p = log4c_category_get(LOG_CATEGORY);
+//
+//  DLOG(log_category_p, "success for initial log4c service of MPU");
+//
+//  rc = sqlite3_open(DB_NAME, &mpuDB);
+//  if (0 != rc)
+//    {
+//   ELOG(log_category_p, "SQLerror: %s", sqlite3_errmsg(mpuDB));
+//   sqlite3_close(mpuDB);
+//   return false;
+//    }
+//
+//  //MPU Center CLock arrived:counter=1, sync time=32366615
+//  //DEBUG io-<analyzer> service idle:counter=0,info.counter=0,now=32366615,SyncTime=32366614,waiting time=899
+//  //analyzer thread running more later than Clock
+//
+// //if(fork()==0)
+//    //{
+//   //MPU_initialize(&myMPU,mpuDB,NULL);
+//   mpu_initialize(&myMPU,mpuDB,log_category_p);
+//   DLOG(log_category_p,"Service initial time at: %lld", myMPU.pMPUCenter->pMasterSlaveSyncInfo->sMPUInitialTime);
+//   //}
+//  while(1)
+//    {
+//
+//      mpuMasterSlaveSyncInfo_clock(myMPU.pMPUCenter);
+//
+//      usleep(ANALYZER_PERIOD*1000);
+//    }
+//
+//  mpu_free(&myMPU);
+//  sqlite3_close(mpuDB);
+//
+//  //DLOG(log_category_p,"log4c service shutdown at: %s", get_time_string());
+//
+//  log4c_fini();
+//  exit(true);
+//}
+//

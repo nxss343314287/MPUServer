@@ -1,0 +1,40 @@
+/*
+ * MPUReceiver.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: root
+ */
+
+#include "MPU.h"
+
+
+//����MPU�����߳�
+int MPUReceiver_initialize(MPUReceiver  *receiver)
+{
+
+		return true;
+}
+
+//�ͷ�MPU�����߳�
+int MPUReceiver_free(MPUReceiver  *receiver)
+{
+
+
+		return true;
+}
+
+
+//MPU��������ͣ
+int MPUReceiver_pause(MPUReceiver  *receiver)
+{
+
+
+		return true;
+}
+
+//MPU��������λ
+int MPUReceiver_resume(MPUReceiver  *receiver)
+{
+
+		return true;
+}

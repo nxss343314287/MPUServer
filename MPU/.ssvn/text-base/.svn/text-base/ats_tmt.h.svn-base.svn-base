@@ -1,0 +1,283 @@
+#ifndef _COMMON_H_
+#define _COMMON_H_
+
+/* System header files */
+#include <limits.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "../CO/ats_co_sql.h"
+#include "../log.h"
+extern sqlite3 * db;
+
+
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+
+
+	/*-- Global defines --*/
+
+	#define  TRUE   1
+	#define  FALSE  0
+
+	/* Return Value */
+	#define  RT_ERR         -1
+	#define  RT_OK          0
+
+	/* Return Value - Error No. (1 - 0xFFFF reserved) */
+	#define  E_COM_BEGIN    0x10000
+	#define  E_NET_BEGIN    0x20000
+	#define  E_IO_BEGIN     0x30000
+	#define  E_CAS_BEGIN    0x40000
+	#define  E_FEP_BEGIN    0x50000
+
+
+	/*-- Global typedefs --*/
+	typedef  unsigned char       byte;    /**< @brief  Type of 1-byte.  */
+	typedef  unsigned short int  WORD;    /**< @brief  Type of 2-byte  */
+	typedef  unsigned long int   DWORD;   /**< @brief  Type of 4-byte  */
+
+	typedef  unsigned int        UInt;    /**< @brief  Platform related interger type  */
+	typedef  unsigned short int  UShort;  /**< @brief  Type of 2-byte  */
+	typedef  unsigned long int   ULong;   /**< @brief  Type of 4-byte  */
+
+	typedef  int (*CompFunc)(void *data_p1, void *data_p2);
+	typedef  int (*ProcFunc)(void *data_p, void *userdata_p);
+
+
+	/*-- Global Functions --*/
+
+	/**
+	 * @brief   Function-like MAX.
+	 * @warning Becareful don't use "i++" like code as a or b.
+	 */
+	#ifndef  MAX
+		#define  MAX(a,b)  ((a) > (b)? (a): (b))
+	#endif
+
+	/**
+	 * @brief   Function-like MIN.
+	 * @warning Becareful don't use "i++" like code as a or b.
+	 */
+	#ifndef  MIN
+		#define  MIN(a,b)  ((a) < (b)? (a): (b))
+	#endif
+
+	/**
+	 * @brief Translate value into constant string.
+	 */
+	#define  PCHAR(v)  #v
+	/**
+	 * @brief Translate marco into constant string.
+	 */
+	#define  PCHAR_MARCO(m)  PCHAR(m)
+
+
+#define TMT_CTC_OCCUPY 2
+#define TMT_ITC_OCCUPY 3
+#define TMT_IXL_OCCUPY 1
+#define TMT_OCCUPY 0
+#define TMT_DEFAULT_DATA -1
+#define TMT_TRAIN_START 0
+#define TMT_TRAIN_ARRIVAL 1
+#define TMT_CLEAR 1
+#define TMT_CTC_TRAIN 3
+#define TMT_ITC_TRAIN 2
+#define TMT_DEPARTURE_TRACK 5
+#define TMT_CONVERTION_TRACK 0
+#define TMT_STATION_TRACK 4
+#define TMT_STATION_TRIGGER_TRACK 6
+#define TMT_TURNBACK_TRACK 2
+#define TMT_STATION_TURNBACKTRACK 7
+
+#define TMT_DEPARTURE_TRACK_UP 51
+#define TMT_DEPARTURE_TRACK_DOWN 52
+#define TMT_PRE_STATION_TRACK 8
+#define TMT_TRIGGER_TRACK 9   /*������*/
+
+#define TMT_NO_DIRECTION 10
+#define TMT_LOGICAL_FREE 11
+#define TMT_ITC_OCCUPIED 3      /*add*/
+#define TMT_CTC_OCCUPIED 2
+#define TMT_ATP_FREE 13
+#define TMT_PRE_TRIGGER_TRACK 14
+#define TMT_SUCCESS 15
+#define TMT_TRAINID_ALREADYEXIT 16
+#define TMT_INDEX_ALREADYEXIT 17
+#define TMT_CARNUMBER_ALREADYEXIT 18
+#define TMT_AXLE_NODIRECTION -3
+#define TMT_DRIVE_RM 1
+
+#define TMT_TRAINID_NULL 1
+#define TMT_TRAINID_FAULT 0
+#define TMT_TRAINID_NORMAL 2
+#define TMT_TRAINID_CLOSEF 3
+#define TMT_MAX_TRANSATION 85
+
+#define TMT_ADD_TRAINID     0
+#define TMT_DELETE_TRAINID   1
+#define TMT_MODIFY_TRAINID    2
+#define TMT_STEP_TRAINID   3
+#define RM 0
+
+
+int tmt_dir_enterline;
+int tmt_dir_exitline;
+int tmt_first_train_index ;
+int tmt_des_max;
+int tmt_sc_max;
+int tmt_sr_max;
+int tmt_crew_max;
+int tmt_line_max;
+int tmt_car_ma;
+int tmt_des_leh;
+int tmt_sev_leh;
+int tmt_sei_leh;
+int tmt_track_begin;
+int tmt_track_end;
+int ptid;
+int tmt_inr_AllData;
+int tmt_inr_ModifiyNO;
+int tmt_block_cbtc;
+int tmt_block_circuit;
+int tmt_ele_track;
+int tmt_ele_tn_status;
+int tmt_ele_tn_position;
+int tmt_ele_axle;
+int tmt_ele_point;
+int tmt_ele_crossing;
+int oldAtpVacancy;
+int tmt_atp_valid;
+int tmt_trainID_Length;
+int disposalID;
+int ThreeLength;
+int TwoLength;
+int Success;
+short DefaultData;
+int DestinationNotValid;
+short ConvertionTrack;
+short StationTrack;
+short StationTurnbackTrack;
+short StationTriggerTrack;
+int CTCTrain;
+//int TrainArrival;
+int NoTrain;
+int DestinationNotValid;
+int TrainNotFound;
+int TrainMax;
+int TrainIDLength;
+int CarNumberAlreadyExist;
+char *timeStamp;
+
+byte ModifyTrainFailed;
+byte DeleteTrainFailed;
+int Success;
+int FirstTrainIndex;
+int indexArith;
+int UndifinedTrain;
+
+int stepFlag;
+
+typedef struct
+{
+	int index;
+    int internal;
+    int telegramType;
+    int logicalFree;
+    int atpAvailable;
+    int atpVacancy;
+    int freeStatus;
+}CoDataForTmt;
+
+
+//TrainPostion *trainPosition;
+
+int TMTInit();
+
+int tmt_axl_AxleOccpyProcess(const int axleID, int physicalFree);
+int tmt_axl_ConvertionAxleProcess(const int axle, const int freeStatus);
+int tmt_axl_StationAxleProcess(const int axleID);
+int tmt_axl_DepartureAxleProcess(const int axleID,const int direction);
+int tmt_axl_PrestationAxleProcess(const int axleID);
+int ats_axl_TriggerAxleProcess(const int axleID, int dwellTime);
+
+
+int tmt_io_UpdateProcess(CoDataForTmt * dataStruct);
+int tmt_io_NewTrainID(int PTID, char * oldTrainID, char * trainID);
+int tmt_io_TrainIDShow (const int trackID, char * trainID, int showOrNo);
+int tmt_io_TrainTime(const int ptid, char * trainID, int dwellTime, int deviationTime);
+int tmt_io_TrainMCOut(char * trainID, const int trackID);
+int tmt_io_ReturnCodeOut(int result);
+
+
+void tmt_ManualTrainIDProcess(byte modifyType,
+	            ushort destionation, ushort service, ushort serial, int car1, int car2, ushort logicalTrack,
+	            ushort oldDes, ushort oldService, ushort oldSerial, ushort oldLogcialTrack,byte isBogus);
+
+char *tmt_NumberToString(ushort number, byte length);
+void tmt_ManualAddTrainID(char *newTrainID, int carNumber, short trackID);
+void tmt_ManualDeleteTrainID(char *trainID, short trackID);
+void tmt_ManualModifyTrainID(char *newTrainID, char *oldTrainID, short trackID);
+void tmt_TriggerStopStation(short trackID, char *TrainID, char *timestamp);
+void tmt_ManualStepTrainID(char *trainID, short newTrackID, short oldTrackID);
+int tmt_SearchNoTrainIDIndex(short trackID);
+
+
+int tmt_tk_ConvertionTrackProcess(const int trackid, const int freeStatus);
+int ats_tmt_StationTrackProcess(const int trackid);
+int tmt_tk_DepartureTrackProcess(const int trackid,const int direction);
+int ats_tmt_PrestationTrackProcess(const int trackid);
+int tmt_tk_TriggerTrackProcess(const int trackid, int dwellTime);
+int tmt_tk_TrackOccpyProcess(const int trackid, int * physicalFree);
+//int ats_ars_add_requirement(TrainIDs *trainids, int EquipmentType, const int trackid, Datetime trggerTime, Datetime stationDwellTime);
+
+
+int tmt_tn_dh_TrainStatusProcess(char *trainID,int carNumber,int trainIndex,int index,int destination,int service,int serial,int crew,int line,int driverMode);
+int tmt_tn_dh_IndexBasedProcess(char *trainID, TrainIDs * associatedTrainID, const int CarNumber, const int position);
+int tmt_tn_dh_TrainIDBasedProcess(const int index, char * trainID, TrainIDs * associatedTrainID, const int CarNumber, const  int position, const int crew);
+int tmt_tn_dh_PositionBasedProcess(const int index, char * trainID, TrainIDs * associatedTrainID, const int CarNumber, const  int position, const int crew);
+int tmt_tn_dh_CreateTrainFromStatus(const int index, char * trainID, const int crewNo, const int trackID);
+int tmt_tn_dh_TrainIDRelated(char * trainID, const int trackID,int  addOrCancel);
+int tmt_tn_dh_TrainIDRelatedAddDelete(const int oldTtrackID,const int newTrackID, char * trainID);
+int tmt_tn_dh_AxleTrainIDUpdate(const int oldAxleID, const int newAxleID, char * trainID);
+
+
+
+
+int tmt_tn_sp_CTCStepping(const int trackID,  int * logical_Free);
+int tmt_tn_sp_ITCStepping(const int trackID,  int * logical_Free);
+int tmt_tn_sp_FreeStatusStepping(const  int trackID,  int * logical_Free);
+int tmt_tn_sp_axleEdgeTrainIDSerach(const int trackID, const int axleID, const int previousTrackID, const int previousAxleID, const int isLast, const int previousIsLast, TrainIDs* axleTrainIDs);
+int tmt_tn_sp_axleEdgeStepping(const int trackID, const int axleID, const int previousTrackID, const int previousAxleID,  char * previousTrainID,  const int isLast);
+int tmt_tn_sp_axleRelateTrainIDSerach(const  int trackID, const  int axleID, const  int previousTrackID, const  int previousAxleID, const int isLast);
+TrainIDs *tmt_tn_sp_ItcTrainFilter(TrainIDs *serachedTrainIDs);
+int tmt_tn_sp_lineRelateTrainIDSerach (const  int trackID, const  int axleID, const int isLast, const  int serachTrainType);
+int tmt_tn_sp_FreeToITCStepping(const  int trackID, const  int axleID);
+int tmt_tn_sp_lastTrackOccupyProcess(const int trackID, const  int axleID, const int isLast);
+int tmt_tn_sp_CTCToITCStepping (const int trackID, const  int axleID);
+int tmt_tn_CircuitRouteStepping(const  int axleID);
+int tmt_tn_sp_CircuitBasicStepping(const  int axleID);
+int Tmt_tn_sp_SingleCircuitStepping(const  int originalAxleID, const  int axleID, const int direction);
+int tmt_tn_sp_CircuitFreeStepping(const  int axleID);
+int tmt_tn_log_StepHandle(int atpAvailable, int index, int atpVacancy, int logicalFree);
+int tmt_tn_circuit_StepHandle(int index, int freeStatus);
+
+
+
+
+
+
+#ifdef __cplusplus
+	}
+#endif
+
+#endif

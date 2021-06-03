@@ -1,0 +1,989 @@
+#include "cas_tmt.h"
+
+
+
+int tmt_tn_sp_CTCStepping(const  int trackID,  int * logical_Free)
+{
+     TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+     int num;
+     int i;
+     ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, trackID);
+     if(associatedTrainID!=NULL)
+     {
+         return -1;
+     }
+
+     else
+     {
+        int previousTrackID;
+        ats_co_log_GetPreviousTrackId (&previousTrackID, db, trackID);
+        if(previousTrackID!=TMT_DEFAULT_DATA)
+        {
+          int preTrackStatus;
+          ats_co_log_GetFreeStatus (&preTrackStatus, db, previousTrackID);
+          if(preTrackStatus !=TMT_LOGICAL_FREE)
+          {
+
+             ILOG("error preTrackStatus!\n");
+          }
+          else
+          {
+              int num;
+              ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, previousTrackID);
+              if(associatedTrainID!=0)
+              {
+                  tmt_tn_dh_TrainIDRelatedAddDelete(trackID,previousTrackID, associatedTrainID->trainId);
+                  return 0;
+              }
+              else
+              {
+                 int prePreviousTrackID;
+                 int preTrackStatus;
+                 ats_co_log_GetPreviousTrackId (&prePreviousTrackID, db, previousTrackID);
+                 ats_co_log_GetFreeStatus (&preTrackStatus, db, prePreviousTrackID);
+                 int num;
+                 ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, previousTrackID);
+                 if(associatedTrainID!=0)
+                 {
+                   if(preTrackStatus !=TMT_LOGICAL_FREE)
+                   {
+                      tmt_tn_dh_TrainIDRelatedAddDelete(prePreviousTrackID,previousTrackID,associatedTrainID->trainId);
+                      return 0;
+                   }
+                   else
+                   {
+                          stepFlag=0;
+                          TrainIDs *ptr=associatedTrainID;
+                          while(ptr)
+                          {
+                             int index;
+                             ats_co_tra_GetIndex (&index, db, ptr->trainId);
+                         	 for (i = 0; i < TrainMax; i++)
+                             {
+                         	   TrainPostion trainpostioninfo;
+                         	   ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, i);
+                                if(trainpostioninfo.modifiedPosition==1&&prePreviousTrackID==trainpostioninfo.modifiedPtrackNo&&previousTrackID==trainpostioninfo.modifiedTrackNo)
+                                {
+                                    tmt_tn_dh_TrainIDRelatedAddDelete(prePreviousTrackID,previousTrackID,associatedTrainID->trainId);
+                                    stepFlag=1;
+                                }
+                                else
+                                {
+                                   continue;
+                                }
+                             }
+                             ptr++;
+                   }
+                   if(stepFlag==1)
+                   {
+                            return 0;
+                   }
+                 }
+               }
+               else
+               {
+                    TrainIDs *trainids=malloc(sizeof(TrainIDs));
+                    int num;
+                    ats_co_tra_GetTrainIds(trainids, &num, db);
+                    while(trainids)
+                    {
+                           int occupytrackid;
+                           ats_co_tra_GetOccupyTrackId (&occupytrackid, db, trainids->trainId);
+                           if(TMT_DEFAULT_DATA==occupytrackid)
+                           {
+                               stepFlag=1;
+                               tmt_tn_dh_TrainIDRelatedAddDelete(occupytrackid,trackID, trainids->trainId);
+                           }
+                           else
+                           {
+                              continue;
+                           }
+                           trainids++;
+                    }
+                    free(trainids);
+                    if(stepFlag==1)
+                    {
+                          return 0;
+                    }
+                    else
+                    {
+                          //tmt_tn_sm_CreateTrainJudge();
+                    }
+                }
+             }
+          }
+
+        }
+        else
+        {
+           return -1;
+
+        }
+     }
+     free(associatedTrainID);
+     return 0;
+}
+
+
+int tmt_tn_sp_ITCStepping(const int trackID,  int * logical_Free)
+{
+    int oldAtpVacancy;
+    ats_co_log_GetOldATPVacancyStatus(&oldAtpVacancy, db, trackID);
+    int axlecounterid;
+    ats_co_log_GetAssociatedAxleCounterId (&axlecounterid, db,trackID);
+    if(oldAtpVacancy==TMT_CTC_OCCUPIED)
+    {
+       tmt_tn_sp_CTCToITCStepping (trackID,TMT_CTC_OCCUPIED);
+       return 0;
+    }
+    else
+    {
+      if(oldAtpVacancy==TMT_ATP_FREE)
+      {
+         tmt_tn_sp_FreeToITCStepping(trackID,TMT_ATP_FREE);
+      }
+      return 0;
+    }
+}
+
+
+
+
+int tmt_tn_sp_FreeStatusStepping(const int trackID,  int *logical_Free)
+{
+     TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+     int num;
+     ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, trackID);
+     if(associatedTrainID==NULL)
+     {
+        return -1;
+     }
+     int nextTrackID;
+     ats_co_log_GetNextTrackId (&nextTrackID,db,trackID);
+     if(nextTrackID==TMT_DEFAULT_DATA)
+     {
+        ats_co_log_GetNextTrackId (&nextTrackID, db, trackID);
+
+     }
+     int preTrackStatus;
+     ats_co_log_GetFreeStatus (&preTrackStatus, db, nextTrackID);
+     if(preTrackStatus !=TMT_LOGICAL_FREE)
+     {
+         while(associatedTrainID)
+         {
+              int nextTracktype;
+              tmt_tn_dh_TrainIDRelatedAddDelete(trackID,nextTrackID, associatedTrainID->trainId);
+              ats_co_log_GetTrackType (&nextTracktype, db, nextTrackID);
+              if(TMT_PRE_TRIGGER_TRACK==nextTracktype)
+              {
+            	  int dwellTime;
+            	  tmt_tk_TriggerTrackProcess(trackID, dwellTime);
+              }
+              associatedTrainID++;
+         }
+
+     }
+     else
+     {
+         int previousTrackID;
+         ats_co_log_GetPreviousTrackId (&previousTrackID, db, trackID);
+         if(previousTrackID==TMT_DEFAULT_DATA)
+         {
+              tmt_tn_dh_TrainIDRelated(associatedTrainID->trainId, previousTrackID,0);
+              ILOG("error!\n");
+         }
+         else
+         {
+            int preTrackStatus;
+            ats_co_log_GetFreeStatus (&preTrackStatus, db, trackID);
+            if(preTrackStatus ==TMT_LOGICAL_FREE)
+            {
+                return -1;
+            }
+            else
+            {
+                while(associatedTrainID)
+                {
+                    tmt_tn_dh_TrainIDRelatedAddDelete(trackID,previousTrackID, associatedTrainID->trainId);
+                    associatedTrainID++;
+                }
+
+            }
+
+         }
+
+     }
+     free(associatedTrainID);
+     return 0;
+}
+
+
+int tmt_tn_sp_axleEdgeTrainIDSerach(const  int trackID, const  int axleID, const  int previousTrackID, const int previousAxleID, const int isLast, const int previousIsLast, TrainIDs* axleTrainIDs)
+{
+   int preTrackStatus;
+   ats_co_log_GetFreeStatus (&preTrackStatus, db, trackID);
+   if(preTrackStatus!=TMT_LOGICAL_FREE)
+   {
+      return 0;
+
+   }
+   if(previousIsLast!=1)
+   {
+     int preATPStatus;
+     ats_co_log_GetStatus (&preATPStatus, db, trackID);
+     if(preATPStatus!=TMT_ITC_OCCUPY)
+     {
+        return 0;
+     }
+   }
+   else
+   {
+       int haveItc=0;
+       if(axleTrainIDs!=NULL)
+       {
+          while(axleTrainIDs)
+          {
+              int trainType;
+              ats_co_tra_GetTrainType  (&trainType, db, axleTrainIDs->trainId);
+              if(trainType!=TMT_ITC_TRAIN)
+              {
+                  continue;
+              }
+              else
+              {
+                  haveItc=1;
+
+              }
+              axleTrainIDs++;
+          }
+          if(haveItc==1)
+          {
+              return 0;
+          }
+
+       }
+
+   }
+   TrainIDs *previousTrackTrainIDs=malloc(sizeof(TrainIDs));
+   int num;
+   ats_co_trt_GetAssociatedTrainId (previousTrackTrainIDs, &num, db, trackID);
+   if(previousTrackTrainIDs==NULL)
+   {
+      tmt_tn_sp_axleRelateTrainIDSerach(trackID,axleID,previousTrackID,previousAxleID, isLast);
+   }
+   else
+   {
+      int tracktype;
+      ats_co_log_GetTrackType (&tracktype, db, trackID);
+      if(tracktype!=TMT_ITC_TRAIN)
+      {
+        if(tracktype!=TMT_CTC_TRAIN)
+        {
+           return 0;
+        }
+        ats_co_tra_SetTrainType (db, previousTrackTrainIDs, tracktype);
+
+      }
+      //tmt_tn_sp_AxleEdgeSetpping();
+   }
+   free(previousTrackTrainIDs);
+   return 0;
+}
+
+
+int tmt_tn_sp_axleEdgeStepping (const  int trackID, const  int axleID, const  int previousTrackID, const  int previousAxleID,  char * previousTrainID,  const int isLast)
+{
+	 TrainIDs *trainids=malloc(sizeof(TrainIDs));
+	 int trainType;
+	 int ctcFlag=0;
+     if(axleID!=previousAxleID)
+     {
+    	 ats_co_axt_AxleStepTrainId (db, trainids, previousAxleID, axleID);
+     }
+     ats_co_trt_TrackStepTrainId (db, trainids, previousTrackID, trackID);
+     tmt_io_TrainIDShow (trackID, trainids->trainId, 1);
+     if(isLast!=1)
+     {
+         int nextTrackID;
+
+         ats_co_log_GetNextTrackId (&nextTrackID, db, trackID);
+         int num;
+         ats_co_trt_GetAssociatedTrainId (trainids, &num, db, trackID);
+         while(trainids)
+         {
+            ats_co_tra_GetTrainType(&trainType, db, trainids->trainId);
+            if(trainType!=TMT_CTC_TRAIN)
+            {
+               continue;
+            }
+            else
+            {
+                ctcFlag=1;
+            }
+            trainids++;
+         }
+         if(ctcFlag!=1)
+         {
+            return 0;
+
+         }
+
+     }
+     tmt_io_TrainIDShow (trackID, trainids->trainId, 0);
+     free(trainids);
+     return 0;
+}
+
+
+int tmt_tn_sp_axleRelateTrainIDSerach(const  int trackID, const  int axleID, const  int previousTrackID, const  int previousAxleID, const int isLast)
+{
+    int preAxleStatus;
+    ats_co_axl_GetFreeStatus (&preAxleStatus, db, previousAxleID);
+    if(preAxleStatus==1)
+    {
+       return 0;
+    }
+    else
+    {
+       TrainIDs *previousAxleTrainIDs=malloc(sizeof(TrainIDs));
+       int num;
+       ats_co_trt_GetAssociatedTrainId (previousAxleTrainIDs, &num, db, previousAxleID);
+       TrainIDs *itcTrainIDs;
+       itcTrainIDs=tmt_tn_sp_ItcTrainFilter(previousAxleTrainIDs);
+       if(itcTrainIDs==NULL)
+       {
+           tmt_tn_sp_lineRelateTrainIDSerach(trackID,axleID, isLast, TMT_ITC_OCCUPY);
+       }
+       else
+       {
+           tmt_tn_sp_axleEdgeStepping (trackID, axleID, previousTrackID, previousAxleID, previousAxleTrainIDs->trainId, isLast);
+       }
+       free(previousAxleTrainIDs);
+    }
+    return 0;
+}
+
+
+
+TrainIDs *tmt_tn_sp_ItcTrainFilter(TrainIDs *serachedTrainIDs)
+{
+     TrainIDs *ItcTrainIDs=malloc(sizeof(TrainIDs));
+     if(serachedTrainIDs==NULL)
+     {
+         return NULL;
+     }
+     while(serachedTrainIDs)
+     {
+         int trainType;
+         ats_co_tra_GetTrainType  (&trainType, db, serachedTrainIDs->trainId);
+         if(trainType==TMT_CTC_TRAIN)
+         {
+            memcpy(ItcTrainIDs, serachedTrainIDs->trainId, sizeof(TrainIDs));
+         }
+         else
+         {
+            continue;
+         }
+
+
+        serachedTrainIDs++;
+     }
+     free(ItcTrainIDs);
+     return ItcTrainIDs;
+
+}
+
+
+int tmt_tn_sp_lineRelateTrainIDSerach (const  int trackID, const  int axleID, const int isLast, const  int serachTrainType)
+{
+   TrainIDs *noRelateTrainID=malloc(sizeof(TrainIDs));
+   int occupyTrackID;
+   int num;
+   TrainIDs *allTrainIDs;
+   ats_co_tra_GetTrainIds (allTrainIDs, &num, db);
+   while(allTrainIDs)
+   {
+      int trainType;
+      ats_co_pla_GetAssociatedTrackId (&occupyTrackID, db, axleID);
+      if(occupyTrackID!=TMT_DEFAULT_DATA)
+      {
+          continue;
+      }
+      ats_co_tra_GetTrainType (&trainType, db, allTrainIDs->trainId);
+      if(trainType!=serachTrainType)
+      {
+          continue;
+      }
+      memcpy(noRelateTrainID, allTrainIDs->trainId, sizeof(TrainIDs));
+      allTrainIDs++;
+   }
+   if(noRelateTrainID!=NULL)
+   {
+     int noRelateAxleID;
+     ats_co_log_GetAssociatedAxleCounterId (&noRelateAxleID, db, occupyTrackID);
+     tmt_tn_sp_axleEdgeStepping (trackID, noRelateAxleID, occupyTrackID, noRelateAxleID,  noRelateTrainID->trainId,  isLast);
+   }
+   free(noRelateTrainID);
+   return 0;
+}
+
+
+int tmt_tn_sp_FreeToITCStepping(const int trackID, const  int axleID)
+{
+   int ctcExit;
+   int previousTrackID;
+   ats_co_log_GetPreviousTrackId (&previousTrackID, db, trackID);
+   int previousAxleID;
+   ats_co_log_GetAssociatedAxleCounterId (&previousAxleID, db, trackID);
+   int isLast;
+   ats_co_log_LastTrackOfAxleCounter (&isLast, db, trackID);
+   TrainIDs *axleTrainIDs=malloc(sizeof(TrainIDs));
+   int num;
+   ats_co_trt_GetAssociatedTrainId (axleTrainIDs, &num, db, axleID);
+   int previousIsLast;
+   ats_co_log_LastTrackOfAxleCounter (&isLast, db, trackID);
+   if(previousAxleID==axleID)
+   {
+     int oldStatus;
+     ats_co_log_GetOldATPVacancyStatus(&oldStatus, db, trackID);
+     int status;
+     ats_co_log_GetStatus (&status, db, trackID);
+     if((oldStatus == TMT_ATP_FREE  && status != TMT_ITC_OCCUPIED)||(status == TMT_CTC_OCCUPIED))
+     {
+        return 0;
+     }
+     TrainIDs *ITCTrainIDs=malloc(sizeof(TrainIDs));
+     if(axleTrainIDs!=NULL)
+     {
+        while(axleTrainIDs)
+        {
+           int trainType;
+           ats_co_tra_GetTrainType(&trainType,db, axleTrainIDs->trainId);
+           if(trainType==TMT_ITC_TRAIN)
+           {
+                memcpy(ITCTrainIDs, axleTrainIDs->trainId, sizeof(TrainIDs));
+           }
+           else
+           {
+              if(trainType==TMT_CTC_TRAIN)
+              {
+                 ctcExit=1;
+              }
+           }
+           axleTrainIDs++;
+        }
+        if(ITCTrainIDs!=NULL)
+        {
+           tmt_tn_sp_axleEdgeStepping(trackID, axleID, previousTrackID, previousAxleID, ITCTrainIDs->trainId,isLast);
+           return 0;
+        }
+        else
+        {
+           if(ctcExit==1)
+           {
+              return 0;
+           }
+           tmt_tn_sp_lastTrackOccupyProcess(trackID,axleID,isLast);
+           return 0;
+        }
+     }
+     free(ITCTrainIDs);
+
+   }
+   else
+   {
+      tmt_tn_sp_axleEdgeTrainIDSerach(trackID,axleID,previousTrackID,previousAxleID,isLast,previousIsLast,axleTrainIDs);
+      free(axleTrainIDs);
+      return 0;
+   }
+   free(axleTrainIDs);
+   return 0;
+}
+
+
+
+int tmt_tn_sp_lastTrackOccupyProcess(const int trackID, const  int axleID, const int isLast)
+{
+    if(isLast==1)
+    {
+       int *IncldingTracks=malloc(sizeof(int));
+       int num;
+       ats_co_axl_GetContainTrackId (IncldingTracks, &num,  db, axleID);
+       int length=0;
+       int *ptr=IncldingTracks;
+       while(ptr)
+       {
+          length++;
+          ptr++;
+       }
+       int firstTrack;
+       if(trackID==*(ptr+length))
+       {
+          firstTrack=*ptr;
+       }
+       else
+       {
+         firstTrack=*(ptr+length);
+       }
+       int previousTrackID;
+       ats_co_log_GetPreviousTrackId (&previousTrackID, db, firstTrack);
+       int previousAxleID;
+       ats_co_log_GetAssociatedAxleCounterId (&previousAxleID, db, previousTrackID);
+       if(previousAxleID==axleID)
+       {
+          tmt_tn_sp_lineRelateTrainIDSerach(trackID,axleID,isLast, TMT_ITC_OCCUPIED);
+          return 0;
+       }
+       else
+       {
+          TrainIDs *previousAxleTrainIDs=malloc(sizeof(TrainIDs));
+          int num;
+          ats_co_trt_GetAssociatedTrainId (previousAxleTrainIDs, &num, db, axleID);
+          TrainIDs *itcTrainIDs;
+          itcTrainIDs=tmt_tn_sp_ItcTrainFilter(previousAxleTrainIDs);
+          if(itcTrainIDs==NULL)
+          {
+             tmt_tn_sp_lineRelateTrainIDSerach(trackID,axleID,isLast, TMT_ITC_OCCUPIED);
+             return 0;
+          }
+          else
+          {
+             tmt_tn_sp_axleEdgeStepping (trackID,axleID, previousTrackID, previousAxleID, previousAxleTrainIDs->trainId,isLast);
+             return 0;
+          }
+          free(previousAxleTrainIDs);
+       }
+       free(IncldingTracks);
+    }
+    return 0;
+}
+
+
+int tmt_tn_sp_CTCToITCStepping (const int trackID, const  int axleID)
+{
+    TrainIDs *trackTrainIDs=malloc(sizeof(TrainIDs));
+    int num;
+    ats_co_trt_GetAssociatedTrainId (trackTrainIDs, &num, db, trackID);
+    if(trackTrainIDs==NULL)
+    {
+    	int axleCounterId;
+        ats_co_log_GetAssociatedAxleCounterId (&axleCounterId, db, trackID);
+        TrainIDs *axleTrainIDs;
+        int num;
+        ats_co_trt_GetAssociatedTrainId (axleTrainIDs, &num, db, axleID);
+        TrainIDs *axleITCTrainIDs;
+        axleITCTrainIDs=tmt_tn_sp_ItcTrainFilter(axleTrainIDs);
+        int associatedTrackID;
+        ats_co_tra_GetOccupyTrackId (&associatedTrackID, db,axleITCTrainIDs->trainId);
+        int isLast;
+        ats_co_log_LastTrackOfAxleCounter (&isLast, db, trackID);
+        tmt_tn_sp_axleEdgeStepping (trackID,axleID,associatedTrackID,axleID,axleITCTrainIDs->trainId,isLast);
+        return 0;
+    }
+    else
+    {
+        while(trackTrainIDs)
+        {
+             ats_co_tra_SetTrainType(db,trackTrainIDs->trainId, TMT_ITC_OCCUPY);
+             trackTrainIDs++;
+        }
+        return 0;
+    }
+    free(trackTrainIDs);
+}
+
+int tmt_tn_CircuitRouteStepping(const  int axleID)
+{
+    TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+    int num;
+    ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+    if(associatedTrainID!=NULL)
+    {
+       int result;//=ats_co_axl_GetPreviousAxleIDByRoute();
+       if(result==0)
+       {
+           int preAxleStatus;
+           ats_co_axl_GetFreeStatus (&preAxleStatus, db, axleID);
+           if(preAxleStatus!=TMT_LOGICAL_FREE)
+           {
+              TrainIDs *preAssociatedTrainID=malloc(sizeof(TrainIDs));
+              int num;
+              ats_co_trt_GetAssociatedTrainId (preAssociatedTrainID, &num, db, preAxleStatus);
+              if(preAssociatedTrainID!=NULL)
+              {
+                 tmt_tn_dh_AxleTrainIDUpdate(preAxleStatus, axleID, preAssociatedTrainID->trainId);
+                 return 0;
+              }
+              else
+              {
+                 TrainIDs *ppAssociatedTrainID=malloc(sizeof(TrainIDs));
+                 int num;
+                 ats_co_trt_GetAssociatedTrainId (ppAssociatedTrainID, &num, db, preAxleStatus);
+                 if(ppAssociatedTrainID!=NULL)
+                 {
+                    int ppAxleStatus;
+                    ats_co_axl_GetFreeStatus (&ppAxleStatus, db, preAxleStatus);
+                    if(ppAxleStatus!=TMT_LOGICAL_FREE)
+                    {
+                       return 0;
+                    }
+                    else
+                    {
+                       tmt_tn_dh_AxleTrainIDUpdate(ppAxleStatus,preAxleStatus,ppAssociatedTrainID->trainId);
+                    }
+                 
+                 }
+                 else
+                 {
+                    TrainIDs *trainids_all=malloc(sizeof(TrainIDs));
+                    int num;
+                    ats_co_tra_GetTrainIds (trainids_all, &num, db);
+                    while(trainids_all)
+                    {
+                       int counterid;
+                       ats_co_tra_GetOccupyAxleCounterId  (&counterid, db, trainids_all->trainId);
+                       if(TMT_DEFAULT_DATA!=counterid)
+                       {
+                          continue;                       
+                       }
+                       else
+                       {
+                    	   tmt_tn_dh_AxleTrainIDUpdate(preAxleStatus, axleID, trainids_all->trainId);
+                       }
+                       trainids_all++;
+             
+                    }
+                    free(trainids_all);
+                 }
+                 free(ppAssociatedTrainID);
+              }
+              free(preAssociatedTrainID);
+           }
+           
+           return 0;
+       
+       }
+       else
+       {
+           if(result==TMT_AXLE_NODIRECTION)
+           {
+              tmt_tn_sp_CircuitBasicStepping(axleID);
+           
+           }
+           else
+           {
+              return 0;
+           
+           }
+       
+       }
+
+    }
+    free(associatedTrainID);
+    return 0;
+}
+
+
+int tmt_tn_sp_CircuitBasicStepping(const  int axleID)
+{
+    int Array[4]={0,0,0,0};
+    int aimAxle;
+    //ats_co_axl_GetAroundAxleID();
+    int left1Status=0;
+    int right1Status=0;
+    int left2Status=0;
+    int right2Status=0;
+    ats_co_axl_GetFreeStatus(&left1Status, db, axleID);
+    ats_co_axl_GetFreeStatus(&right1Status, db, axleID);
+    if(Array[0]==Array[1])
+    {
+        int Right1Status;
+        ats_co_axl_GetFreeStatus(&Right1Status, db, axleID);
+        if(Right1Status==TMT_LOGICAL_FREE)
+        {
+           return 0;
+        }
+        else
+        {
+           TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+           int num;
+           ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+           if(associatedTrainID!=0)
+           {
+               tmt_tn_dh_AxleTrainIDUpdate(aimAxle, axleID, associatedTrainID->trainId);
+           }
+           free(associatedTrainID);
+           
+        }
+    
+    }
+    else
+    {
+       if(Array[2]!=-1)
+       {
+          ats_co_axl_GetFreeStatus (&left2Status, db, axleID);
+       }
+       if(Array[3]!=-1)
+       {
+          ats_co_axl_GetFreeStatus (&right2Status, db, axleID);
+       }
+       if((left1Status!=TMT_LOGICAL_FREE&&(Array[2]==-1|| (Array[2]!=-1&&left2Status==TMT_LOGICAL_FREE)))
+        &&((right1Status==TMT_LOGICAL_FREE&&Array[3]==-1) ||(right1Status==TMT_LOGICAL_FREE&&Array[3]!=-1 &&right2Status==TMT_LOGICAL_FREE)))
+       {
+    	   Tmt_tn_sp_SingleCircuitStepping(Array[0], axleID, 0);
+       }
+       else
+       {
+          if((left1Status==TMT_LOGICAL_FREE&&(Array[2]!=-1 &&left2Status!=TMT_LOGICAL_FREE))
+          &&((right1Status==TMT_LOGICAL_FREE&&Array[3]==-1) ||(right1Status==TMT_LOGICAL_FREE&&Array[2]!=-1 &&right2Status==TMT_LOGICAL_FREE)))
+          {
+        	  Tmt_tn_sp_SingleCircuitStepping(Array[2], axleID, 0);
+          }
+          else
+          {
+            if((right1Status!=TMT_LOGICAL_FREE&&(Array[3]==-1|| (Array[4]!=-1&&right2Status==TMT_LOGICAL_FREE)))
+              &&((left1Status==TMT_LOGICAL_FREE&&Array[2]==-1) ||(left1Status==TMT_LOGICAL_FREE&&Array[2]!=-1 &&left2Status==TMT_LOGICAL_FREE)))
+              {
+            	Tmt_tn_sp_SingleCircuitStepping(Array[1], axleID, 0);
+              }
+              else
+              {
+                 if((right1Status==TMT_LOGICAL_FREE&&(Array[3]!=-1 &&right2Status!=TMT_LOGICAL_FREE))
+                   &&((left1Status==TMT_LOGICAL_FREE&&Array[2]==-1) ||(left1Status==TMT_LOGICAL_FREE&&Array[2]!=-1 &&left2Status==TMT_LOGICAL_FREE)))
+                   {
+                	 Tmt_tn_sp_SingleCircuitStepping(Array[3], axleID, 0);
+                   }
+              }
+          }
+       }
+    }
+    return 0;
+}
+
+
+int Tmt_tn_sp_SingleCircuitStepping(const  int originalAxleID, const  int axleID, const int direction)
+{
+    TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+    int num;
+    ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+    if(associatedTrainID!=0)
+    {
+       tmt_tn_dh_AxleTrainIDUpdate(originalAxleID, axleID, associatedTrainID->trainId);
+    
+    }
+    int aroundAxle[2]={0,0};
+    int previousAxle;
+   // ats_co_axl_GetAroundAxleID();
+    if(direction==0)
+    {
+      previousAxle=aroundAxle[0];
+    }
+    else
+    {
+      previousAxle=aroundAxle[1];
+    }
+    ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, previousAxle);
+    if(associatedTrainID!=0)
+    {
+      int status;
+      ats_co_axl_GetFreeStatus (&status, db, previousAxle);
+      if(status==TMT_LOGICAL_FREE)
+      {
+         tmt_tn_dh_AxleTrainIDUpdate(originalAxleID, axleID, associatedTrainID->trainId);
+      
+      }           
+    }
+    free(associatedTrainID);
+    return 0;
+}
+
+int tmt_tn_sp_CircuitFreeStepping(const  int axleID)
+{
+    int aimAxle;
+    int Array[4]={0,0,0,0};
+    //ats_co_axl_GetAroundAxleID();
+    int left1Status=0;
+    int right1Status=0;
+    int left2Status=0;
+    int right2Status=0;
+    ats_co_axl_GetFreeStatus(&left1Status, db, axleID);
+    ats_co_axl_GetFreeStatus(&right1Status, db, axleID);
+    if(Array[0]==Array[1])
+    {
+       ats_co_axl_GetFreeStatus(&right1Status, db, axleID);
+       if(right1Status!=TMT_LOGICAL_FREE)
+       {
+           return 0;
+       }
+       else
+       {
+           TrainIDs *associatedTrainID=malloc(sizeof(TrainIDs));
+           int num;
+           ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+           if(associatedTrainID!=0)
+           {
+        	   tmt_tn_dh_AxleTrainIDUpdate(aimAxle, axleID, associatedTrainID->trainId);
+           }
+           free(associatedTrainID);
+       }
+    }
+    else
+    {
+        if(Array[2]!=-1)
+        {
+            ats_co_axl_GetFreeStatus(&left2Status, db, axleID);
+        }
+        else
+        {
+            if(Array[4]!=-1)
+            {
+                ats_co_axl_GetFreeStatus(&right2Status, db, axleID);
+            }
+            else
+            {
+               if((left1Status!=TMT_LOGICAL_FREE&&(Array[2]==-1|| (Array[2]!=-1&&left2Status==TMT_LOGICAL_FREE)))
+                  &&((right1Status==TMT_LOGICAL_FREE&&Array[3]==-1) ||(right1Status==TMT_LOGICAL_FREE&&Array[3]!=-1 &&right2Status==TMT_LOGICAL_FREE)))
+               {
+               
+                   aimAxle=Array[0];
+                   TrainIDs *associatedTrainID;
+                   int num;
+                   ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+                   tmt_tn_dh_AxleTrainIDUpdate(axleID, aimAxle, associatedTrainID->trainId);
+               }
+               else
+               {
+                   if((left1Status==TMT_LOGICAL_FREE&&(Array[2]!=-1 &&left2Status!=TMT_LOGICAL_FREE))
+                     &&((right1Status==TMT_LOGICAL_FREE&&Array[3]==-1) ||(right1Status==TMT_LOGICAL_FREE&&Array[3]!=-1 &&right2Status==TMT_LOGICAL_FREE)))
+                     {
+                         aimAxle=Array[2];
+                         TrainIDs *associatedTrainID;
+                         int num;
+                         ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+                         tmt_tn_dh_AxleTrainIDUpdate(axleID, aimAxle, associatedTrainID->trainId);
+                     
+                     }
+                     else
+                     {
+                         if((right1Status!=TMT_LOGICAL_FREE&&(Array[3]==-1|| (Array[3]!=-1&&right2Status==TMT_LOGICAL_FREE)))
+                            &&((left1Status==TMT_LOGICAL_FREE&&Array[2]==-1) ||(left1Status==TMT_LOGICAL_FREE&&Array[2]!=-1 &&left2Status==TMT_LOGICAL_FREE)))
+                         {
+                                 aimAxle=Array[1];
+                                 TrainIDs *associatedTrainID;
+                                 int num;
+                                 ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+                                 tmt_tn_dh_AxleTrainIDUpdate(axleID, aimAxle, associatedTrainID->trainId);
+                         }      
+                         else
+                         {
+                              if((right1Status==TMT_LOGICAL_FREE&&(Array[3]!=-1 &&right2Status!=TMT_LOGICAL_FREE))
+                                 &&((left1Status==TMT_LOGICAL_FREE&&Array[2]==-1) ||(left1Status==TMT_LOGICAL_FREE&&Array[2]!=-1 &&left2Status==TMT_LOGICAL_FREE)))
+                               {
+                                   aimAxle=Array[3];
+                                   TrainIDs *associatedTrainID;
+                                   int num;
+                                   ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, axleID);
+                                   tmt_tn_dh_AxleTrainIDUpdate(axleID, aimAxle, associatedTrainID->trainId);
+                               }     
+                         }
+                     }
+               }
+            
+            }
+        
+        }
+    }  
+    return 0;
+}
+
+
+
+int tmt_tn_log_StepHandle(int atpAvailable, int index, int atpVacancy, int logicalFree)
+{
+	 int trackid;
+     int trackType;
+     ats_co_log_GetTrackType (&trackType, db, trackid);
+     int direction;
+     ats_co_log_GetDirection (&direction, db, trackid);
+     if(direction!= TMT_DEFAULT_DATA)
+     {
+         if(trackType==TMT_CONVERTION_TRACK)
+         {
+              if(logicalFree==TMT_OCCUPY  && atpVacancy==TMT_CTC_OCCUPY && direction==tmt_dir_enterline)
+              {
+                  return 0;
+              }
+              else
+              {
+                  if(logicalFree!=TMT_OCCUPY  && direction==tmt_dir_exitline)
+                  {
+                      return 0;
+             
+                  }
+              }
+         }
+         else
+         {
+            if(logicalFree==TMT_OCCUPY)
+            {
+                if(atpAvailable==tmt_atp_valid)
+                {
+                    if(atpVacancy==TMT_CTC_OCCUPY)
+                    {
+                         //������һ�ε�atpVacancy״̬oldAtpVacancy
+                    	int oldstatus;
+                    	ats_co_log_GetOldATPVacancyStatus (&oldstatus, db, trackid);
+                         if(oldAtpVacancy!=TMT_ITC_OCCUPY)
+                         {
+                        	 tmt_tn_sp_CTCStepping(trackid,  &logicalFree);
+                         } 
+                         return 0;
+                    }
+                    else
+                    {
+                         if(atpVacancy==TMT_ITC_OCCUPY )
+                         {
+                        	 tmt_tn_sp_ITCStepping(trackid,  &logicalFree);
+                         }
+                         return 0;
+                    }
+                }
+                else
+                {
+                	tmt_tn_sp_ITCStepping(trackid,  &logicalFree);
+                }
+            }
+            else
+            {
+                   if(atpVacancy==TMT_ATP_FREE)
+                   {
+                	   tmt_tn_sp_FreeStatusStepping(trackid,  &logicalFree);
+                   }
+                   return 0;
+            }
+         
+         }
+     
+     }
+     else
+     {
+         return 0;
+     }
+     return 0;
+}
+
+
+
+int tmt_tn_circuit_StepHandle(int index, int freeStatus)
+{
+     if(freeStatus==TMT_OCCUPY)
+     {
+    	 tmt_tn_CircuitRouteStepping(freeStatus);
+     }
+     else
+     {
+    	 tmt_tn_sp_CircuitFreeStepping(freeStatus);
+     }
+     return 0;
+}
+

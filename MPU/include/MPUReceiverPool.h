@@ -1,0 +1,85 @@
+/*******************************************************************
+ filename      MPUReceiverPool.h
+ author        root
+ created date  2012-1-9
+ description
+ warning
+ modify history
+ author        date        modify        description
+ *******************************************************************/
+
+#ifndef MPURECEIVERPOOL_H_
+#define MPURECEIVERPOOL_H_
+
+#include "MPUMessage.h"
+
+#ifdef  __cplusplus
+extern "C"
+  {
+#endif
+
+typedef struct _MPUReceiverPoolNode
+{
+  ATS_CO_MSG *pMsgHandle;
+  struct _MPUReceiverPoolNode *pPrev;
+  struct _MPUReceiverPoolNode *pNext;
+} MPUReceiverPoolNode;
+
+typedef struct _MPUReceiverPool
+{
+  MPUReceiverPoolNode *pHeaderPointer;
+  MPUReceiverPoolNode *pProcessingPointer;
+  MPUReceiverPoolNode *pReceivingPointer;
+  int Size;
+  int count;
+} MPUReceiverPool;
+
+//��ʼ�����ճ�
+//int mpuReceiverPoolNode * mpuReceiverPoolNode_create( ATS_CO_MSG *msgHandle)
+int
+mpuReceiverPool_initialize(MPUReceiverPool *pool);
+//�ͷŽ��ճ�
+int
+mpuReceiverPool_free(MPUReceiverPool *pool);
+MPUReceiverPoolNode *
+mpuRecevierPool_prev(MPUReceiverPool *pool, MPUReceiverPoolNode *node);
+
+
+MPUReceiverPoolNode *
+mpuReceiverPool_next(MPUReceiverPool *pool, MPUReceiverPoolNode *node);
+
+MPUReceiverPoolNode *
+mpuReceiverPool_insert(MPUReceiverPool *pool, MPUReceiverPoolNode *linker,
+    MPUReceiverPoolNode *node);
+MPUReceiverPoolNode *
+mpuReceiverPool_delete(MPUReceiverPool *pool, MPUReceiverPoolNode *node);
+MPUReceiverPoolNode *
+mpuReceiverPool_delete_RM(MPUReceiverPool *pool, MPUReceiverPoolNode *node);
+MPUReceiverPoolNode *
+mpuReceiverPool_search(MPUReceiverPool *pool, MPUReceiverPoolNode *node);
+MPUReceiverPoolNode *
+mpuReceiverPool_swap(MPUReceiverPool *pool, MPUReceiverPoolNode *src,
+    MPUReceiverPoolNode *des);
+//�����Ϣ�����ճ�
+int
+mpuReceiverPool_check_valid(MPUReceiverPool *pool);
+//�ӽ��ճ�ɾ����Ϣ
+int
+mpuReceiverPool_MSG_delete(MPUReceiverPool *pool, ATS_CO_MSG *handle);
+MPUReceiverPoolNode *
+mpuReceiverPool_MSG_get(MPUReceiverPool *pool, ATS_CO_MSG *handle);
+//�ڽ��ճ��в�����Ϣ
+MPUReceiverPoolNode *
+mpuReceiverPool_MSG_put(MPUReceiverPool *pool, ATS_CO_MSG *handle);
+ATS_CO_MSG *
+mpuReceiverPool_getMsg_byHostSeq(MPUReceiverPool *pool, int hostid, int seq);
+int
+mpuReceiverPool_MSG_deleteSmallSeq_bySingleMsg(MPUReceiverPool *pool, ATS_CO_MSG *handle);
+int
+mpuReceiverPool_MSG_deleteSmallSeq_byMultiMsg(MPUReceiverPool *pool, int hostidlist[],int seqlist[],int MainOrBak[], int listnum);
+
+#ifdef  __cplusplus
+}
+#endif
+
+#endif /* MPURECEIVERPOOL_H_ */

@@ -1,0 +1,53 @@
+/*
+ * mpu.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: w.j
+ */
+
+#include "MPU.h"
+
+
+int MPU_initialize(MPU  *psMPU)
+{
+		//allocate resource for MPU Center structure
+		MPUCenter_initialize(&psMPU->psMPUCenter);
+
+		//start master slave synchronization thread
+		MPUMasterSlaveSync_initialize(&psMPU->ppMPUMasterSlaveSync);
+
+		//start MPU receiver thread
+		MPUReceiver_initialize(&psMPU->ppMPUReceiver);
+
+		//start MPU Analyzer thread
+		MPUAnalyzer_initialize(&psMPU->ppMPUAnalyzer);
+
+		//MPUSender_initialize(&psMPU->ppMPUSender,1);
+
+		return true;
+}
+//�ͷ�MPU
+
+
+int MPU_free(MPU  *psMPU)
+{
+
+		//free master slave sync
+		MPUMasterSlaveSync_free(&psMPU->ppMPUMasterSlaveSync);
+
+		//free MPU Receiver thread
+		MPUReceiver_free(&psMPU->ppMPUReceiver);
+
+		//free MPU Analyzer thread
+		MPUAnalyzer_free(&psMPU->ppMPUAnalyzer);
+
+		//MPUSender_free(&psMPU->ppMPUSender,1);
+
+		//free MPU Center
+		MPUCenter_free(&psMPU->psMPUCenter);
+
+		return true;
+}
+
+
+

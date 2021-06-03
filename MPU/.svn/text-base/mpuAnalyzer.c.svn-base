@@ -1,0 +1,974 @@
+/*******************************************************************
+ filename      mpuAnalyzer.c
+ author        root
+ created date  2012-1-9
+ description   specifications of implemented functions
+ warning
+ modify history
+ author        date        modify        description
+ *******************************************************************/
+
+
+#include"include/MPU.h"
+#include "include/MPUReceiver.h"
+#include "include/MPUReceiverPool.h"
+#include "include/MPUSender.h"
+
+#include "../log.h"
+#include <semaphore.h>
+
+#define   SEM_NAME_NOTIFY_MPU    "cas2mpu"
+#define   SEM_NAME_NOTIFY_CAS    "mpu2cas"
+sem_t * semofcas2mpu;
+sem_t * semofmpu2cas;
+
+
+const char *  LOG_NAME_MPUAnalyzer = "MPU.Analyzer";
+
+int replay_readthead_can_copy_db = 0;
+int replay_writethead_can_import_db = 0;
+extern sqlite3 *db_replay_adapter;
+
+u32 mpuAnalyzer_process_batch_master(MPU *mpu, u32 step, MPU_RM_FRAME_SYN_IND *framesendtoslave,u32 *poolnodecount) {
+	u32 i = 0;
+	int seq = 0;
+	int hostid = 0;
+	ATS_CO_MSG *this_message;
+//	unsigned long long int starttime = 0;
+//	unsigned long long int endtime = 0;
+//    int flag = 0;
+	while (i < step) {
+		//lock pool mutex
+
+		//mpuThreadSyncMutex_lock(&mpu->log_mutex);
+		mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+		//check pool is full
+		if (mpu->pMPUCenter->pReceiverPool->count >= POOL_SIZE)
+		{
+		//  mpuThreadSyncMutex_lock(&mpu->log_mutex);
+			DLOG(
+					"<%s>MPUReceiverPool valid checking,out of pool size,count=%d",
+					LOG_NAME_MPUAnalyzer,mpu->pMPUCenter->pReceiverPool->count);
+		  //mpuThreadSyncMutex_unlock(&mpu->log_mutex);
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+			continue;
+		}
+
+		//if pool header is frank, then return false;
+		//assert(mpu->pMPUCenter->pReceiverPool->pProcessingPointer!=NULL);
+		if ((mpu->pMPUCenter->pReceiverPool->pHeaderPointer == NULL)) {
+			//mpuThreadSyncMutex_unlock(&mpu->log_mutex);
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+			framesendtoslave->listnum = 0;
+
+			return false;
+		}
+		else {
+		//set processing Pointer as header pointer
+		mpu->pMPUCenter->pReceiverPool->pProcessingPointer =
+				mpu->pMPUCenter->pReceiverPool->pHeaderPointer;
+		}
+
+//		if (mpuReceiverPool_check_valid(mpu->pMPUCenter->pReceiverPool)	== false) {
+//
+//			    ELOG("<%s>MPUAnalyzer Thread find: poolnode is error!",LOG_NAME_MPUAnalyzer);
+//				//mpuThreadSyncMutex_unlock(&mpu->log_mutex);
+//				mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+//				continue;
+//			}
+
+//		//now ,all of things are ready,so we can start to control progress of parsing...
+//		//unpack message packet
+//		ats_co_unpackATSCOMessage(
+//				mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle);
+//		framesendtoslave->seqNo[i] = seq =
+//				mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->header.seqno;
+//		framesendtoslave->iHostID[i] = hostid =
+//				mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->header.srcno;
+//
+//		//then refresh them to database tables
+//		if (mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->setDBFunc
+//				!= NULL)
+//			ats_co_refreshDBATSCOMessage(
+//					mpu->pDB,
+//					mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle);
+
+//		//to call logical processor
+//		if (mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->logicalMsgFunc!= NULL
+//			)
+//		{
+//			ats_co_logicalMsgFunc(mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle);
+//
+//		}
+
+//		if(flag > 0)
+//				{
+//					endtime = get_time_msecond();
+//					DLOG("<%s>mpu wait %lld mssend to request lock pool!",LOG_NAME_MPUAnalyzer,endtime-starttime);
+//				}
+	  this_message = malloc(sizeof(ATS_CO_MSG));
+	  memset(this_message,0,sizeof(ATS_CO_MSG));
+	  this_message->fixed_len = mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->fixed_len;
+	  this_message->format = malloc(this_message->fixed_len);
+	  memset(this_message->format, 0, this_message->fixed_len);
+	  memcpy(this_message->format, mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->format ,this_message->fixed_len);
+	  this_message->header = mpu->pMPUCenter->pReceiverPool->pProcessingPointer->pMsgHandle->header;
+	  ILOG("app message head:seq=%d,host=%d",this_message->header.seqno,(int)this_message->header.srcno);
+
+	  ats_co_initMessageValue(this_message);
+	  //mpuThreadSyncMutex_unlock(&mpu->log_mutex);
+
+	  ILOG("app message config:message_type=%d,element_type=%d",this_message->config.message_type,this_message->config.element_type);
+
+	  if(this_message->config.index == 0)
+	  {
+		  ats_co_FepStatusMsg message_1;
+		  ats_co_BufferConvertToFepStatusMsg(this_message->format ,&message_1);
+		  if(message_1.fepID<=0 || message_1.fepID >=1000)
+		  {
+			  this_message->bufferConvertToMsgFunc = NULL;
+			  this_message->setDBFunc = NULL;
+
+//			  ILOG("error fepmsg content:fepID=%d,fepModule=%d,fepStatus=%d",message_1.fepID,message_1.fepModule,message_1.fepStatus);
+//			  ILOG("error fepmsg config:message_type=%d,element_type=%d",this_message->config.message_type,this_message->config.element_type);
+//		  ILOG("error fepmsg head:seqno=%d,srcno=%d,destno=%d,srcmodule=%d,destmodule=%d,datatype=%d,protocoltype=%d,mainorbak=%d,remain=%d,datalen=%d",
+//				  this_message->header.seqno,
+//				  this_message->header.srcno,
+//				  this_message->header.destno,
+//				  this_message->header.srcmodule,
+//				  this_message->header.destmodule,
+//				  this_message->header.datatype,
+//				  this_message->header.protocoltype,
+//				  this_message->header.mainorbak,
+//				  this_message->header.remain,
+//				  this_message->header.datalen);
+		  }
+	  }
+
+		i++;
+
+
+		//head pointer move to next
+		mpu->pMPUCenter->pReceiverPool->pHeaderPointer =
+				mpuReceiverPool_next(
+				mpu->pMPUCenter->pReceiverPool,(MPUReceiverPoolNode *)
+				mpu->pMPUCenter->pReceiverPool->pHeaderPointer);
+
+		//delete processing pointer of pool
+		mpu->pMPUCenter->pReceiverPool->pProcessingPointer=
+		mpuReceiverPool_delete(mpu->pMPUCenter->pReceiverPool,
+				mpu->pMPUCenter->pReceiverPool->pProcessingPointer);
+
+		//if processing is end of ReceiverPool ,then return .
+		if (mpu->pMPUCenter->pReceiverPool->pHeaderPointer == NULL)
+		{
+			*poolnodecount = mpu->pMPUCenter->pReceiverPool->count;
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+		    ats_co_unpackATSCOMessage(this_message);
+			framesendtoslave->seqNo[i-1] = seq = this_message->header.seqno;
+			framesendtoslave->iHostID[i-1] = hostid = this_message->header.srcno;
+			if (this_message->setDBFunc != NULL)
+				ats_co_refreshDBATSCOMessage(mpu->pDB,this_message);
+			if (this_message->logicalMsgFunc != NULL)
+				ats_co_logicalMsgFunc(mpu->pDB_replay,this_message);
+
+			if (this_message != NULL)
+				ats_co_freeATSCOMessage(this_message);
+
+			step = i;
+			framesendtoslave->listnum = i;
+			return seq;
+		}
+
+		*poolnodecount = mpu->pMPUCenter->pReceiverPool->count;
+		mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+		ats_co_unpackATSCOMessage(this_message);
+		framesendtoslave->seqNo[i-1] = seq = this_message->header.seqno;
+		framesendtoslave->iHostID[i-1] = hostid = this_message->header.srcno;
+//		starttime = get_time_msecond();
+		if (this_message->setDBFunc != NULL)
+			ats_co_refreshDBATSCOMessage(mpu->pDB,this_message);
+		if (this_message->logicalMsgFunc != NULL)
+			ats_co_logicalMsgFunc(mpu->pDB_replay,this_message);
+//		endtime = get_time_msecond();
+//		DLOG("<%s>mpu need %lld mssend to update sqlite!",LOG_NAME_MPUAnalyzer,endtime-starttime);
+		if (this_message != NULL)
+			ats_co_freeATSCOMessage(this_message);
+
+
+	}
+
+	framesendtoslave->listnum = step;
+	step = i;
+	return seq;
+}
+
+u32 mpuAnalyzer_process_batch_slaver(MPU *mpu, int hostidlist[], int seqlist[], int listnum, u32 *poolnodecount) {
+	u32 i = 0;
+	ATS_CO_MSG *handle;
+	ATS_CO_MSG *this_message;
+
+	while (i < listnum) {
+		//lock pool mutex
+
+		mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+		//if pool header is frank, then return false;
+		//assert(mpu->pMPUCenter->pReceiverPool->pProcessingPointer!=NULL);
+		if ((mpu->pMPUCenter->pReceiverPool->pHeaderPointer == NULL)) {
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+			return false;
+		}
+		else {
+		//set processing Pointer as header pointer
+		mpu->pMPUCenter->pReceiverPool->pProcessingPointer =
+				mpu->pMPUCenter->pReceiverPool->pHeaderPointer;
+		}
+
+//		if (mpuReceiverPool_check_valid(mpu->pMPUCenter->pReceiverPool)	== false) {
+//
+//			    ELOG("<%s>MPUAnalyzer Thread find: poolnode is error!",LOG_NAME_MPUAnalyzer);
+//				mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+//				continue;
+//			}
+
+		//now ,all of things are ready,so we can start to control progress of parsing...
+		//unpack message packet
+		handle = mpuReceiverPool_getMsg_byHostSeq(mpu->pMPUCenter->pReceiverPool, hostidlist[i], seqlist[i]);
+		if(handle != NULL)
+		{
+			this_message = malloc(sizeof(ATS_CO_MSG));
+			memset(this_message,0,sizeof(ATS_CO_MSG));
+		    this_message->fixed_len = handle->fixed_len;
+			this_message->format = malloc(this_message->fixed_len);
+			memset(this_message->format, 0, this_message->fixed_len);
+			memcpy(this_message->format, handle->format ,this_message->fixed_len);
+			this_message->header = handle->header;
+			ILOG("this_message head:seq=%d,host=%d",this_message->header.seqno,(int)this_message->header.srcno);
+			ats_co_initMessageValue(this_message);
+
+			ILOG("this_message config:message_type=%d,element_type=%d",this_message->config.message_type,this_message->config.element_type);
+
+			mpuReceiverPool_MSG_deleteSmallSeq_bySingleMsg(mpu->pMPUCenter->pReceiverPool, handle);
+			*poolnodecount = mpu->pMPUCenter->pReceiverPool->count;
+
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+			ats_co_unpackATSCOMessage(this_message);
+			if (this_message->setDBFunc != NULL)
+				ats_co_refreshDBATSCOMessage(mpu->pDB,this_message);
+
+			if (this_message != NULL)
+				ats_co_freeATSCOMessage(this_message);
+
+		}
+		else
+		{
+			ILOG("miss msg:seq=%d,host=%d", seqlist[i], hostidlist[i]);
+			mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+			return false;
+		}
+
+
+		i++;
+	}
+
+	return true;
+}
+
+
+int Master_switch_init_finish = 0;
+int alreadySendLockRsptoRM = 0;
+
+static void *
+mpuAnalyzer_running(void *arg) {
+	MPU *mpu = (MPU *) arg;
+	sqlite3 *db = 0;
+	sqlite3 *db_replay = 0;
+	MPU_RM_FRAME_SYN_IND frameSyncMsg;
+	u32 deal_number = 0, poolnodecount = 0;
+	MPUMasterSlaveSyncInfo info;
+//    int alreadySendLockRsptoRM = 0;
+    int changeCountTimes = 0;
+    int expire_flag = 0;
+    int period_count = 0;
+    int replaydb_close_flag = 0;
+    int rc = 0;
+
+//    int Master_switch_init_finish = 0;
+
+    unsigned long long int starttime = 0;
+    unsigned long long int endtime = 0;
+
+    if(adapter_init() == -1)
+    	return NULL;
+
+    //int slave_to_master_flag = 0;
+    semofcas2mpu = sem_open(SEM_NAME_NOTIFY_MPU, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+    if(semofcas2mpu == SEM_FAILED)
+    {
+    	ELOG("mpuAnalyzer_running: sem_open(SEM_NAME_NOTIFYMPU,0) failed! errno: %d", errno);
+    	return -1;
+    }
+    semofmpu2cas = sem_open(SEM_NAME_NOTIFY_CAS, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+    if(semofmpu2cas == SEM_FAILED)
+    {
+    	ELOG("mpuAnalyzer_running: sem_open(SEM_NAME_NOTIFYCAS,0) failed! errno: %d", errno);
+    	return -1;
+    }
+
+	while (TRUE) {
+        //entrance: get role info from MasterSlaveSyncInfo
+		mpuMasterSlaveSyncInfo_get(mpu->pMPUCenter, &info);
+
+		//1------> analyze  processing as master mode
+		if (info.iMPUMasterSlaveID == MASTER)
+		{
+			        //ILOG("NOW IS MASTER");
+			        //sem_unlink(SEM_NAME_NOTIFYMPU);
+				    //sem_unlink(SEM_NAME_NOTIFYCAS);
+//			        semofcas2mpu = sem_open(SEM_NAME_NOTIFYMPU,0);
+//			        if(semofcas2mpu == SEM_FAILED)
+//			        {
+//			        	ILOG("sem_open(SEM_NAME_NOTIFY_MPU) failed!");
+//			        	continue;
+//			        }
+//			        semofmpu2cas = sem_open(SEM_NAME_NOTIFYCAS,0);
+//			        if(semofmpu2cas == SEM_FAILED)
+//			        {
+//			        	ILOG("sem_open(SEM_NAME_NOTIFY_CAS) failed!");
+//			        	continue;
+//			        }
+			        //DLOG("<%s>mpu start to wait semofcas2mpu!",LOG_NAME_MPUAnalyzer);
+			        if(Master_switch_init_finish == 0)
+			        {
+			        	ILOG("MASTER:semofcas2mpu");
+			        	if (0 != sem_wait(semofcas2mpu))
+			        	{
+			        		ELOG("mpuAnalyzer_running: sem_wait(semofcas2mpu) failed! errno: %d", errno);
+			        		sem_close(semofcas2mpu);
+			        		semofcas2mpu = sem_open(SEM_NAME_NOTIFY_MPU, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+			        		if (0 != semofcas2mpu)
+			        		{
+				        		ELOG("mpuAnalyzer_running: sem_open(semofcas2mpu) failed! errno: %d", errno);
+//				        		unlink(SEM_NAME_NOTIFYMPU);
+				        		usleep(1000);
+				        		continue;
+			        		}
+	        				usleep(1000);
+	        				continue;
+			        	}
+			        }
+			        else
+			        	Master_switch_init_finish = 0;
+			        //DLOG("<%s>mpu receive notify from cas,start analyse msg!",LOG_NAME_MPUAnalyzer);
+
+			        // init period value
+			        alreadySendLockRsptoRM = 0;
+//			        changeCountTimes = 0;
+			        expire_flag = 0;
+			        replaydb_close_flag = 0;
+			        //if(sqlite3_open("/dbofwork/ATRSQL.db", &db) != SQLITE_OK)
+			        if(sqlite3_open(DB_NAME, &db) != SQLITE_OK)
+			        {
+			        	DLOG("mpu open db error!");
+			        	sqlite3_close(db);
+					    while(0 != sem_post(semofmpu2cas))
+					    {
+					    	ELOG("sem_post(semofmpu2cas)1 errno=%d! ",errno);
+					    	sem_close(semofmpu2cas);
+					    	semofmpu2cas = sem_open(SEM_NAME_NOTIFY_CAS, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+					    	if(0 != semofmpu2cas)
+					    	{
+					    		ELOG("sem_open(semofmpu2cas) 2errno=%d! ",errno);
+
+					    	}
+					    	usleep(1000);
+					    }
+					    continue;
+//			    	    return NULL;
+			        }
+
+			        rc=sqlite3_open(ATS_WORK_DB_FOR_REPLAY_NAME, &db_replay);
+			        if(rc != SQLITE_OK)
+					{
+						DLOG("mpu open db_replay error!");
+						sqlite3_close(db);
+						sqlite3_close(db_replay);
+					    while(0 != sem_post(semofmpu2cas))
+					    {
+					    	ELOG("sem_post(semofmpu2cas)3 errno=%d! ",errno);
+					    	sem_close(semofmpu2cas);
+					    	semofmpu2cas = sem_open(SEM_NAME_NOTIFY_CAS, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+					    	if(0 != semofmpu2cas)
+					    	{
+					    		ELOG("sem_open(semofmpu2cas)4 errno=%d! ",errno);
+
+					    	}
+					    	usleep(1000);
+					    }
+						continue;
+					}
+			        mpu->pDB = db;
+			        mpu->pDB_replay = db_replay;
+			        db_replay_adapter = db_replay;
+
+			        //(1).send task : get appmsg from db and send to net
+			        mpuSender_SendTask_process (mpu->pDB);
+
+			        //(2).receive task: get msg from receivepool and update db
+			        unsigned long long int starttime = get_time_msecond();
+
+			        NetTime frameSyncDataTime = get_time_msecond();
+			        ILOG("CO DB begin immediate transaction");
+			        rc = sqlite3_exec(mpu->pDB , "begin immediate transaction" , 0 , 0 ,NULL);
+			        if(SQLITE_OK!=rc)
+			        {
+			        	ELOG("CO DB begin immediate transaction error rc=%d",rc);
+			        	while(TRUE)
+			        	{
+			        		rc = sqlite3_exec(mpu->pDB , "begin immediate transaction" , 0 , 0 ,NULL);
+			        		if(SQLITE_OK==rc)
+			        		{
+			        			break;
+			        		}
+			        		sleep(1);
+			        	}
+			        }
+			        ILOG("CO DB begin immediate transaction sucess");
+			        ILOG("replay DB begin immediate transaction");
+			        rc = sqlite3_exec(mpu->pDB_replay , "begin immediate transaction" , 0 , 0 ,NULL);
+			        if(SQLITE_OK!=rc)
+					{
+						ELOG("replay DB begin immediate transaction error rc=%d",rc);
+						while(TRUE)
+						{
+							rc = sqlite3_exec(mpu->pDB , "begin immediate transaction" , 0 , 0 ,NULL);
+							if(SQLITE_OK==rc)
+							{
+								break;
+							}
+							sleep(1);
+						}
+					}
+			        ILOG("replay DB begin immediate transaction success");
+			        if((deal_number = mpuAnalyzer_process_batch_master(mpu, PERIOD_PROCESS_MSGNUM, &frameSyncMsg, &poolnodecount))!=false)
+					{
+
+					//mpuThreadSyncMutex_lock(&mpu->log_mutex);
+//					DLOG(
+//							"<%s>Analyzing process %d msg success in this period,last anylyzed seqno=%d",
+//							LOG_NAME_MPUAnalyzer,
+//							frameSyncMsg.listnum,
+//							deal_number);
+//					DLOG(
+//							"<%s>ReceiverPool has %d msg left",LOG_NAME_MPUAnalyzer,poolnodecount);
+					rc = sqlite3_exec(mpu->pDB , "commit transaction" , 0 , 0 , NULL);
+					if(SQLITE_OK!=rc)
+					{
+						ELOG("CO DB commit transaction error rc=%d",rc);
+					}
+					rc = sqlite3_exec(mpu->pDB_replay , "commit transaction" , 0 , 0 , NULL);
+					if(SQLITE_OK!=rc)
+					{
+						ELOG("replay DB commit transaction error rc=%d",rc);
+					}
+					unsigned long long int endtime = get_time_msecond();
+//					DLOG("<%s>mpu spend %lld mssend to process msg!",LOG_NAME_MPUAnalyzer,endtime-starttime);
+
+					//(3).rm task : send frameSyncMsg to SLAVE machine
+					frameSyncMsg.iDesModuleID = SELFRM_MODULE;
+					frameSyncMsg.iMessageID = CO_RM_FRAME_SYN_IND;
+					frameSyncMsg.iLength = 3+ 4+4*frameSyncMsg.listnum;
+					frameSyncMsg.sMPUSyncTime = frameSyncDataTime;
+					//mpu_rm_frame_syn_ind(&frameSyncMsg);
+					ats_co_FramesyncMsgSetDB(mpu->pDB, &frameSyncMsg);
+//				    unsigned long long int endtime = get_time_msecond();
+//				    DLOG("<%s>mpu spend %lld mssend to process msg!",LOG_NAME_MPUAnalyzer,endtime-starttime);
+				}
+				else
+				{
+//					DLOG(
+//							"<%s>ReceiverPool has no msg in this period!",LOG_NAME_MPUAnalyzer);
+					//mpuThreadSyncMutex_unlock(&mpu->log_mutex);
+				}
+			    ++period_count;
+			    if(period_count%4 == 0)
+			    {
+			    	/*sqlite3_close(mpu->pDB);
+			    	mpu->pDB = NULL;
+			    	sqlite3_close(mpu->pDB_replay);
+			    	mpu->pDB_replay = NULL;
+
+			    	if(sqlite3_open(DB_NAME, &db) != SQLITE_OK)
+					{
+						DLOG("mpu open db error!");
+						sqlite3_close(db);
+						sem_post(semofmpu2cas);
+						continue;
+					}
+			    	mpu->pDB = db;
+					if(sqlite3_open(ATS_WORK_DB_FOR_REPLAY_NAME, &db_replay) != SQLITE_OK)
+					{
+						DLOG("mpu open db_replay error!");
+						sqlite3_close(db_replay);
+						sem_post(semofmpu2cas);
+						continue;
+					}
+					mpu->pDB_replay = db_replay;*/
+			    	unsigned long long int starttime = get_time_msecond();
+					char command_shell[MAX_SQL_STR_LEN];
+					memset(command_shell, 0, MAX_SQL_STR_LEN);
+					sprintf(command_shell, "bash %s %s %s > /dev/null", DUMPSH_PATH, DB_NAME, TABLE_NEED_CLEAR_ONE);
+					system(command_shell);
+					DLOG("ATT");
+					memset(command_shell, 0, MAX_SQL_STR_LEN);
+					sprintf(command_shell, "bash %s  %s & > /dev/null", SYNC_ORCL,TABLE_NEED_CLEAR_ONE);
+					system(command_shell);
+			    	DLOG("<%s>mpu output %s SQL Text sucess!",LOG_NAME_MPUAnalyzer,"ATT");
+					char command[MAX_SQL_STR_LEN];
+					memset(command, 0, MAX_SQL_STR_LEN);
+					sprintf(command, "bash %s %s %s > /dev/null", DUMPSH_PATH, DB_NAME, TABLE_NEED_CLEAR_SEC);
+					system(command);
+					DLOG("AlarmList");
+					memset(command_shell, 0, MAX_SQL_STR_LEN);
+					sprintf(command_shell, "bash %s  %s & > /dev/null", SYNC_ORCL,TABLE_NEED_CLEAR_SEC);
+					system(command_shell);
+					DLOG("<%s>mpu output %s SQL Text sucess!",LOG_NAME_MPUAnalyzer,"AlarmList");
+			    	unsigned long long int endtime = get_time_msecond();
+			    	//DLOG("<%s>mpu output command: %s",LOG_NAME_MPUAnalyzer, command);
+			    	DLOG("<%s>mpu spend %lld mssend to output SQL Text!",LOG_NAME_MPUAnalyzer,endtime-starttime);
+			    	//DLOG("<%s>mpu output SQL Text sucess!",LOG_NAME_MPUAnalyzer);
+			    	//period_count = 0;
+
+//			    	char sqlstr[MAX_SQL_STR_LEN];
+//			    	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+//					sprintf(sqlstr, "delete from %s", TABLE_NEED_CLEAR_ONE);
+//					sqlite3_exec(mpu->pDB, sqlstr, 0, 0,NULL);
+//
+//					int rc;
+//					int count = 0;
+//					int need_delete = 1;
+//					sqlite3_stmt *stmt;
+//					while(need_delete > 0)
+//					{
+//						memset(sqlstr, 0, MAX_SQL_STR_LEN);
+//					    sprintf(sqlstr, "select count(*) from %s", TABLE_NEED_CLEAR_ONE);
+//					    sqlite3_prepare(mpu->pDB, sqlstr, strlen(sqlstr), &stmt, NULL);
+//					    rc = sqlite3_step(stmt);
+//					    if (SQLITE_ROW == rc)
+//					    {
+//					    	need_delete = 0;
+//					    	count = sqlite3_column_int(stmt, 0);
+//						    sqlite3_finalize(stmt);
+//						    if(count > 0)
+//						    {
+//						    DLOG("need to delete again!");
+//						    memset(sqlstr, 0, MAX_SQL_STR_LEN);
+//							sprintf(sqlstr, "delete from %s", TABLE_NEED_CLEAR_ONE);
+//							sqlite3_exec(mpu->pDB, sqlstr, 0, 0,NULL);
+//						    }
+//						    else
+//						    {
+//						    	need_delete = 0;
+//						    	break;
+//						    }
+//							memset(sqlstr, 0, MAX_SQL_STR_LEN);
+//							sprintf(sqlstr, "select count(*) from %s", TABLE_NEED_CLEAR_ONE);
+//							sqlite3_prepare(mpu->pDB, sqlstr, strlen(sqlstr), &stmt, NULL);
+//							rc = sqlite3_step(stmt);
+//							if (SQLITE_ROW == rc)
+//							{
+//								count = sqlite3_column_int(stmt, 0);
+//								if(count > 0)
+//									need_delete = 1;
+//							}
+//							sqlite3_finalize(stmt);
+//					    }
+//					    else
+//					    {
+//					    	need_delete = 0;
+//						    sqlite3_finalize(stmt);
+//						    //DLOG("no need to delete again!");
+//
+//					    }
+//					}
+//					char sqlstr[MAX_SQL_STR_LEN];
+//					memset(sqlstr, 0, MAX_SQL_STR_LEN);
+//					sprintf(sqlstr, "delete from %s", TABLE_NEED_CLEAR_SEC);
+//					sqlite3_exec(mpu->pDB, sqlstr, 0, 0,NULL);
+
+			    	 if(period_count == 20)
+			    	 {
+			    		int net_re = mpuSender_SendNetStatus_process (mpu->pDB);
+			    		if(net_re == -1)
+			    		{
+			    			ELOG("mpuSender_SendNetStatus_process :error");
+			    		}
+
+			    		 mpuThreadSyncMutex_lock(&mpu->pMPUExtesionRead->extesionread_mutex);
+			    		 sqlite3_close(mpu->pDB_replay);
+			    		 replaydb_close_flag = 1;
+			    		 replay_readthead_can_copy_db = 1;
+			    		 mpuThreadSyncMutex_unlock(&mpu->pMPUExtesionRead->extesionread_mutex);
+
+			    		 period_count = 0;
+			    	 }
+			    	 else
+			    	 {
+			    		 sqlite3_close(mpu->pDB_replay);
+			    	 }
+			    }
+                //if(replaydb_close_flag == 0)
+                	sqlite3_close(mpu->pDB_replay);
+			    int closedb_result = sqlite3_close(mpu->pDB);
+				if(closedb_result != SQLITE_OK)
+					DLOG("MPU close db error!");
+			    while(0 != sem_post(semofmpu2cas))
+			    {
+			    	ELOG("sem_post(semofmpu2cas)5 errno=%d! ",errno);
+			    	sem_close(semofmpu2cas);
+			    	semofmpu2cas = sem_open(SEM_NAME_NOTIFY_CAS, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR , 0);
+			    	if(0 != semofmpu2cas)
+			    	{
+			    		ELOG("sem_open(semofmpu2cas)6 errno=%d! ",errno);
+
+			    	}
+			    	usleep(1000);
+			    }
+
+			 //   sem_post(semofmpu2cas);
+			    DLOG("<%s>mpu notify cas sucess!",LOG_NAME_MPUAnalyzer);
+
+//			    mpuMasterSlaveSyncInfo_get(mpu->pMPUCenter, &info);
+//			    if(info.iMPUMasterSlaveID == MCHANGINGSWITCH)
+//			    {
+//			    	MPU_RM_LOCK_RSP lockrspmsg;
+//			    	lockrspmsg.iDesModuleID = SELFRM_MODULE;
+//			    	lockrspmsg.iMessageID = CO_RM_LOCK_RSP;
+//			    	lockrspmsg.iLength = 1;
+//			    	lockrspmsg.iLockReason = 1;
+//			    	mpu_rm_lock_rsp(&lockrspmsg);//send chang rsp to rm
+//			    	alreadySendLockRsptoRM = 1;//set falg
+//			    }
+//			    if(info.iMPUMasterSlaveID == MCHANGINGINIT)
+//			    {
+//			    	//start to copy sql.db to indicated dir
+//			    	MPU_RM_LOCK_RSP lockrspmsg;
+//			    	lockrspmsg.iDesModuleID = SELFRM_MODULE;
+//			    	lockrspmsg.iMessageID = CO_RM_LOCK_RSP;
+//			    	lockrspmsg.iLength = 1;
+//			    	lockrspmsg.iLockReason = 2;
+//			    	mpu_rm_lock_rsp(&lockrspmsg);//send chang rsp to rm
+//			    	alreadySendLockRsptoRM = 1;//set falg
+//			    }
+
+		} //for master processing
+
+		//2------> analyzer processing as slave mode
+		else if (info.iMPUMasterSlaveID == SLAVE)
+		{
+//			ILOG("NOW IS SLAVE");
+			if(info.slaveReceiveFile == TRUE)
+			{
+				ILOG("NOW IS SLAVE1111");
+				//start to load sql.db from indicated dir
+				copy_sourceFile_to_destFile(ATS_RM_DB_NAME, ATS_WORK_DB_NAME);
+
+				sqlite3 *db_temp = 0;
+				//clear pool by delete small frame msgnode
+				if(sqlite3_open(DB_NAME, &db_temp) != SQLITE_OK)
+				{
+					sqlite3_close(db_temp);
+					DLOG("mpu open db error!");
+//					return NULL;
+				}
+				ILOG("NOW IS SLAVE222");
+				//mpu->pDB = db_temp;
+				ats_co_FramesyncMsgGetDB(db_temp, &frameSyncMsg);
+				mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stReceiverPoolMutex);
+				mpuReceiverPool_MSG_deleteSmallSeq_byMultiMsg(mpu->pMPUCenter->pReceiverPool,
+						frameSyncMsg.iHostID, frameSyncMsg.seqNo, frameSyncMsg.listnum);
+				mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+
+				int closedb_result = sqlite3_close(db_temp);
+				if(closedb_result != SQLITE_OK)
+					DLOG("Slave_MPU close db error!");
+
+				DLOG("222");
+				MPU_RM_SYN_FILE_LOAD_CNF fileloadcnfmsg;
+				fileloadcnfmsg.iDesModuleID = SELFRM_MODULE;
+				fileloadcnfmsg.iMessageID = CO_RM_SYN_FILE_LOAD_CNF;
+				fileloadcnfmsg.iLength = 0;
+				DLOG("333");
+				mpu_rm_syn_file_load_cnf(&fileloadcnfmsg);//send file load cnf to rm
+				DLOG("444");
+
+				mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+				mpu->pMPUCenter->pMasterSlaveSyncInfo->slaveReceiveFile = FALSE;
+				//mpu->pMPUCenter->pMasterSlaveSyncInfo->iMPUMasterSlaveID = SLAVE;
+				mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+				DLOG("555");
+			}
+			else
+			{
+//				ILOG("SLAVE wait RM");
+				usleep(1000);
+			}
+//			semofcas2mpu = sem_open(SEM_NAME_NOTIFYMPU,0);
+//
+//			ILOG("iMPUMasterSlaveID == SLAVE");
+//
+//			if(semofcas2mpu == SEM_FAILED)
+//			{
+//				continue;
+//			}
+//			semofmpu2cas = sem_open(SEM_NAME_NOTIFYCAS,0);
+//			if(semofmpu2cas == SEM_FAILED)
+//			{
+//				continue;
+//			}
+//			DLOG("<%s>mpu start to wait semofcas2mpu!",LOG_NAME_MPUAnalyzer);
+//			sem_wait(semofcas2mpu);
+//			ILOG("receive notify from cas!");
+//			if(sqlite3_open(DB_NAME, &db) != SQLITE_OK)
+//			{
+//				DLOG("mpu open db error!");
+//				return NULL;
+//			}
+//			mpu->pDB = db;
+//			//check info ,if receive frame, we can process, then waiting for next frame
+//
+//			 // init period value
+////			 alreadySendLockRsptoRM = 0;
+////			 changeCountTimes = 0;
+//
+//			//(1).send task : get appmsg from db and send to net
+//			mpuSender_SendTask_process (mpu->pDB);
+//
+//		    //(2).receive task: get msg from receivepool and update db
+//            if(info.slaveReceiveFrame == TRUE)
+//            {
+//            	ILOG("CO_RM_FRAME_SYN_RSP");
+//            	MPU_RM_FRAME_SYN_RSP framesynrspmsg;
+//            	framesynrspmsg.iDesModuleID = SELFRM_MODULE;
+//            	framesynrspmsg.iMessageID = CO_RM_FRAME_SYN_RSP;
+//            	framesynrspmsg.iLength = 0;
+//            	mpu_rm_frame_syn_rsp(&framesynrspmsg);
+//
+//            	mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+//            	info.frameSendFromMaster = malloc(sizeof(RM_MPU_FRAME_SYN_REQ));
+//            	memset(info.frameSendFromMaster, 0, sizeof(RM_MPU_FRAME_SYN_REQ));
+//            	memcpy(info.frameSendFromMaster, mpu->pMPUCenter->pMasterSlaveSyncInfo->frameSendFromMaster, sizeof(RM_MPU_FRAME_SYN_REQ));
+//            	mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+//
+//
+//
+//            	sqlite3_exec(mpu->pDB , "begin transaction" , 0 , 0 ,NULL);
+//            	DLOG("listnem = %d",info.frameSendFromMaster->listnum);
+//            	mpuAnalyzer_process_batch_slaver(mpu, info.frameSendFromMaster->iHostID, info.frameSendFromMaster->seqNo, info.frameSendFromMaster->listnum, &poolnodecount);
+//            	sqlite3_exec(mpu->pDB , "commit transaction" , 0 , 0 , NULL);
+//
+//            	DLOG(
+//            		"<%s>Analyzing process %d msg success in this period,last anylyzed seqno=%d",LOG_NAME_MPUAnalyzer,
+//            		info.frameSendFromMaster->listnum,info.frameSendFromMaster->seqNo[info.frameSendFromMaster->listnum-1]);
+//            	DLOG(
+//            		"<%s>ReceiverPool has %d msg left",LOG_NAME_MPUAnalyzer,poolnodecount);
+//
+//            	mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+//            	mpu->pMPUCenter->pMasterSlaveSyncInfo->slaveReceiveFrame = FALSE;
+//            	mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+//
+//            	if (info.frameSendFromMaster != NULL)
+//            		free(info.frameSendFromMaster);
+//
+//            	int closedb_result = sqlite3_close(mpu->pDB);
+//				if(closedb_result != SQLITE_OK)
+//					DLOG("MPU close db error!");
+//            	sem_post(semofmpu2cas);
+//            }
+//            else
+//            {
+//            	int closedb_result = sqlite3_close(mpu->pDB);
+//				if(closedb_result != SQLITE_OK)
+//					DLOG("MPU close db error!");
+//			    sem_post(semofmpu2cas);
+//            	usleep(1000);
+//            }
+		} //for slave processing
+
+		//3------> analyzer processing as temp mode
+		else
+		{
+			if(info.iMPUMasterSlaveID == MCHANGINGSWITCH)
+			{
+				//ILOG("NOW IS MASTER--SWITCH");
+				if(alreadySendLockRsptoRM == 0)
+				{
+					MPU_RM_LOCK_RSP lockrspmsg;
+					lockrspmsg.iDesModuleID = SELFRM_MODULE;
+					lockrspmsg.iMessageID = CO_RM_LOCK_RSP;
+					lockrspmsg.iLength = 1;
+					lockrspmsg.iLockReason = 1;
+					mpu_rm_lock_rsp(&lockrspmsg);//send chang rsp to rm
+					alreadySendLockRsptoRM = 1;
+				}
+
+
+				if(changeCountTimes == 0)
+				{
+					starttime = get_time_msecond();
+					changeCountTimes++;
+				}
+
+				if(expire_flag == 0)
+				{
+					endtime = get_time_msecond();
+					if((endtime - starttime) >= 500)
+					{
+						MPU_RM_LOCK_EXPIRED_IND lockexpiredmsg;
+						lockexpiredmsg.iDesModuleID = SELFRM_MODULE;
+						//lockexpiredmsg.iMessageID = CO_RM_LOCK_RSP;
+						lockexpiredmsg.iMessageID = CO_RM_LOCK_EXPIRED_IND;
+						lockexpiredmsg.iLength = 1;
+						lockexpiredmsg.iLockReason = 1;
+						mpu_rm_lock_expired_ind(&lockexpiredmsg);//send change expire to rm
+						expire_flag = 1;
+					}
+				}
+				usleep(1000);
+
+			}
+
+			if(info.iMPUMasterSlaveID == MCHANGINGINIT)
+			{
+				//ILOG("NOW IS MASTER--INIT REQURE");
+//				ILOG("alreadySendLockRsptoRM--%d",alreadySendLockRsptoRM);
+
+				if(alreadySendLockRsptoRM == 0)
+		        {
+					DLOG("<%s>mpu start to wait semofcalreadySendLockRsptoRMas2mpu!",LOG_NAME_MPUAnalyzer);
+					sem_wait(semofcas2mpu);
+					DLOG("<%s>mpu receive notify from cas,start analyse msg!",LOG_NAME_MPUAnalyzer);
+					//start to copy sql.db to indicated dir
+					copy_sourceFile_to_destFile(ATS_WORK_DB_NAME, ATS_RM_DB_NAME);
+					MPU_RM_LOCK_RSP lockrspmsg;
+					lockrspmsg.iDesModuleID = SELFRM_MODULE;
+					lockrspmsg.iMessageID = CO_RM_LOCK_RSP;
+					lockrspmsg.iLength = 1;
+					lockrspmsg.iLockReason = 2;
+					mpu_rm_lock_rsp(&lockrspmsg);//send chang rsp to rm
+					alreadySendLockRsptoRM = 1;
+
+					Master_switch_init_finish = 1;
+		        }
+//				mpuMasterSlaveSyncInfo_get(mpu->pMPUCenter, &info);
+//				if(info.iMPUMasterSlaveID == MCHANGINGINIT)
+//				{
+					changeCountTimes++;
+					if(changeCountTimes >= 500)
+					{
+						ILOG("lockexpiredmsg");
+						MPU_RM_LOCK_EXPIRED_IND lockexpiredmsg;
+						lockexpiredmsg.iDesModuleID = SELFRM_MODULE;
+						//lockexpiredmsg.iMessageID = CO_RM_LOCK_RSP;
+						lockexpiredmsg.iMessageID = CO_RM_LOCK_EXPIRED_IND;
+						lockexpiredmsg.iLength = 1;
+						lockexpiredmsg.iLockReason = 2;
+						mpu_rm_lock_expired_ind(&lockexpiredmsg);//send change expire to rm
+						changeCountTimes = 0;
+					}
+					usleep(1000);
+//				}
+			}
+
+			if(info.iMPUMasterSlaveID == SCHANGINGINIT)
+			{
+				if(info.slaveReceiveFile == TRUE)
+				{
+					//start to load sql.db from indicated dir
+					copy_sourceFile_to_destFile(ATS_RM_DB_NAME, ATS_WORK_DB_NAME);
+					MPU_RM_SYN_FILE_LOAD_CNF fileloadcnfmsg;
+					fileloadcnfmsg.iDesModuleID = SELFRM_MODULE;
+					fileloadcnfmsg.iMessageID = CO_RM_SYN_FILE_LOAD_CNF;
+					fileloadcnfmsg.iLength = 0;
+					mpu_rm_syn_file_load_cnf(&fileloadcnfmsg);//send file load cnf to rm
+
+					sqlite3 *db_temp = 0;
+					if(sqlite3_open(DB_NAME, &db_temp) != SQLITE_OK)
+					{
+						sqlite3_close(db_temp);
+						DLOG("mpu open db error!");
+//						return NULL;
+					}
+					//mpu->pDB = db;
+					//clear pool by delete small frame msgnode
+					int getdbrc_temp = ats_co_FramesyncMsgGetDB(db_temp, &frameSyncMsg);
+					if(getdbrc_temp != -1)
+					{
+					   mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stReceiverPoolMutex);
+					   mpuReceiverPool_MSG_deleteSmallSeq_byMultiMsg(mpu->pMPUCenter->pReceiverPool,
+							frameSyncMsg.iHostID, frameSyncMsg.seqNo, frameSyncMsg.listnum);
+					   mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stReceiverPoolMutex);
+					}
+					int closedb_result = sqlite3_close(db_temp);
+					if(closedb_result != SQLITE_OK)
+						DLOG("SCHANGINGINIT close db error!");
+
+					//role change to slave myself
+					mpuThreadSyncMutex_lock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+					mpu->pMPUCenter->pMasterSlaveSyncInfo->slaveReceiveFile = FALSE;
+					mpu->pMPUCenter->pMasterSlaveSyncInfo->iMPUMasterSlaveID = SLAVE;
+					mpuThreadSyncMutex_unlock(&mpu->pMPUCenter->stMasterSlaveSyncMutex);
+				}
+				else
+				{
+					usleep(1000);
+				}
+			}
+
+		}
+
+	} //for while
+	return mpu->pMPUAnalyzer;
+}
+
+MPUAnalyzer*
+mpuAnalyzer_initialize(MPU *mpu) {
+	int result;
+	mpu->pMPUAnalyzer = malloc(sizeof(MPUAnalyzer));
+	memset(mpu->pMPUAnalyzer, 0, sizeof(MPUAnalyzer));
+
+	//1.create thread mutex
+	mpuThreadSyncMutex_create(&mpu->pMPUAnalyzer->analyzer_mutex);
+	//2.create receiver thread
+	result = pthread_create(&mpu->pMPUAnalyzer->MPUAnalyzerThread, NULL,
+			mpuAnalyzer_running, mpu);
+	//receiver_thread(mpu);
+	if(result == 0)
+		return mpu->pMPUAnalyzer;
+	else
+		return NULL;
+}
+
+//������������������������������������������������������������������������
+int mpuAnalyzer_free(MPUAnalyzer *analyzer) {
+	mpuThreadSyncMutex_destroy(&analyzer->analyzer_mutex);
+	return true;
+}
+
+//������������������������������������������������������������������������������������
+int mpuAnalyzer_pause(MPUAnalyzer *analyzer) {
+
+	return true;
+}
+
+//������������������������������������������������������������������������
+int mpuAnalyzer_resume(MPUAnalyzer *analyzer) {
+
+	return true;
+}
+

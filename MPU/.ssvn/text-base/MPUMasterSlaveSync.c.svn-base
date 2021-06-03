@@ -1,0 +1,40 @@
+/*
+ * MPUMasterSlaveSync.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: root
+ */
+
+#include "MPU.h"
+
+//��ʼ��ͬ����
+int MPUMasterSlaveSync_initialize(MPUMasterSlaveSync  *synchronizer)
+{
+
+		return true;
+}
+
+//�ͷ�ͬ����
+int MPUMasterSlaveSync_free(MPUMasterSlaveSync  *synchronizer)
+{
+
+		return true;
+}
+
+//��ͣ
+int MPUMasterSlaveSync_pause(MPUMasterSlaveSync  *synchronizer)
+{
+
+
+		return true;
+}
+
+
+//��λ
+int MPUMasterSlaveSync_resume(MPUMasterSlaveSync  *synchronizer)
+{
+
+
+		return true;
+
+}

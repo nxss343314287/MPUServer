@@ -1,0 +1,53 @@
+#include "cas_tmt.h"
+
+
+
+int TMTInit()
+ {
+	int i;
+	TwoLength=2;
+	ThreeLength=3;
+	Success=0;
+	TrainMax=100;
+	FirstTrainIndex=32768;
+	indexArith=1;
+	UndifinedTrain=0;
+	tmt_trainID_Length=8;
+	machineNO_hmi=1;
+	machineNO_fep=2;
+	machineNO_default=3;
+    componentNO_cmp=1;
+	componentNO_tts=1;
+
+	TrainPostion trainpostioninfo;
+	if (log4c_init()) {
+		printf("log4c_init() failed");
+	}
+	log_set_category("cas_tmt");
+	/*for (i = 0; i < TrainMax; i++)
+	{
+		ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, i);
+		printf("crewNo=[%d]\n",trainpostioninfo.crewNo);
+	}*/
+	for (i = 0; i < TrainMax; i++)
+	{
+		trainpostioninfo.index = FirstTrainIndex +indexArith*i;
+		trainpostioninfo.driverMode = RM;      //所有列车驾驶模式定义为RM(人工驾驶）
+		trainpostioninfo.position = DefaultData;  //列车位置=-1
+		trainpostioninfo.crewNo = 0;    //司机号定义为-1
+		trainpostioninfo.isFirstOrNo = -1;
+		trainpostioninfo.controlLevel = UndifinedTrain;
+	    ats_co_tmtsyn_UpdateTrainPostionData (db, &trainpostioninfo,i);//更新一行，结构体指针为输入参数
+	}
+	/*
+	for (i = 0; i < TrainMax; i++)
+	{
+		ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, i);
+		printf("crewNo=[%d]\n",trainpostioninfo.crewNo);
+	}*/
+
+     return 0;
+ }
+
+
+

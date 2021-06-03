@@ -1,0 +1,50 @@
+/***************************************************************//**
+   @file                           tmt_train_data.h
+   @author                         zhangxy
+   @date                           2011-04-22
+   @brief                          client of ats
+   @version                        1.0
+   @historyhead{author,            data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-05-05,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#ifndef __TMT_TRAIN_DATA_H__
+#define __TMT_TRAIN_DATA_H__
+
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <limits.h>
+#include "tmt_com.h"
+#ifdef  __cplusplus
+	extern "C" {
+#endif
+
+
+int tmt_tn_dh_TrainStatusProcess(char *trainID,int carNumber,int trainIndex,int index,int destination,int service,int serial,int crew,int line,int driverMode);
+int tmt_tn_dh_IndexBasedProcess(char *trainID, TrainIDs * associatedTrainID, const int CarNumber, const int position);
+int tmt_tn_dh_TrainIDBasedProcess(const int index, char * trainID, TrainIDs * associatedTrainID, const int CarNumber, const  int position, const int crew);
+int tmt_tn_dh_PositionBasedProcess(const int index, char * trainID, TrainIDs * associatedTrainID, const int CarNumber, const  int position, const int crew);
+int tmt_tn_dh_CreateTrainFromStatus(const int index, char * trainID, const int crewNo, const int trackID);
+int tmt_tn_dh_TrainIDRelated(char * trainID, const int trackID,int  addOrCancel);
+int tmt_tn_dh_TrainIDRelatedAddDelete(const int oldTtrackID,const int newTrackID, char * trainID);
+int tmt_tn_dh_AxleTrainIDUpdate(const int oldAxleID, const int newAxleID, char * trainID);
+
+
+
+#ifdef  __cplusplus
+	}
+#endif
+
+#endif
+
+

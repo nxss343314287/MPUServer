@@ -1,0 +1,52 @@
+/*******************************************************************
+ filename							ats_co_convert.h
+ author								w.j.
+ create data						09-OCT-2011
+ description
+ warning
+ modify history
+ author			data(modify)		modify(list)	description
+ 
+ ********************************************************************/
+
+#ifndef _ATS_CO_CONVERT_H_
+#define _ATS_CO_CONVERT_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <math.h>
+
+//!!! don't alter below definition
+#define LOW_ENDIAN      		 1   //0��Ч    //1��Ч 
+#define HIGH_ENDIAN      		 0   //0��Ч    //1��Ч 
+#define true 	0
+#define false 	-1
+
+//�ֽ���ת������
+enum ConvertByteType
+{
+	CHAR2BYTE = 1, //char converse byte
+	SHT2BYTE = 2, //short converse byte
+	INT2BYTE = 4, //int converse byte
+	LONGLONG2BYTE = 8,//long long converse byte
+};
+
+typedef unsigned char BYTE;
+typedef unsigned char byte;
+typedef short u_int16;
+typedef int u_int32;
+typedef long long u_int64;
+
+
+u_int64 accumulate(int num, int times);
+int setBitsOfByte(BYTE *bye, int posii, int width, int value);
+int countValueofBits(BYTE b, int pos, int width);
+int getBytesOfValue(BYTE * buffer, u_int64 value, int len);
+int reverseBytes(const BYTE *src, BYTE *des, int len);
+u_int64 countValueofBytes(const BYTE * buffer, int len);
+u_int64 int2bytes(BYTE bye[], const int mode, u_int64 num);
+u_int64 bytes2int(const BYTE bye[], int mode);
+
+#endif

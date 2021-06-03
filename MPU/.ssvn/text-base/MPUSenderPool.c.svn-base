@@ -1,0 +1,44 @@
+/*
+ * MPUSenderPool.c
+ *
+ *  Created on: 2011-12-22
+ *      Author: root
+ */
+
+#include "MPU.h"
+
+//��ʼ��
+int MPUSenderPool_initialize(MPUSenderPool  *pool)
+{
+
+		return true;
+}
+
+//�ͷ�
+int MPUSenderPool_free(MPUSenderPool  *pool)
+{
+
+		return true;
+}
+
+//�����Ϣ�����ͳ�
+int MPUSenderPool_add_message(ATS_CO_MSG *message, MPUSenderPool  *pool)
+{
+
+		return true;
+}
+
+//�ڷ��ͳز�����Ϣ
+int MPUSenderPool_search_message(ATS_CO_MSG *message, MPUSenderPool  *pool)
+{
+
+		return true;
+}
+
+//�ڷ��ͳ���ɾ����Ϣ
+int MPUSenderPool_delete_message(ATS_CO_MSG *message, MPUSenderPool  *pool)
+{
+
+		return true;
+}
+

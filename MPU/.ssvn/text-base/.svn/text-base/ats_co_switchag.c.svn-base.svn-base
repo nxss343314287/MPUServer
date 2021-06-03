@@ -1,0 +1,52 @@
+/*******************************************************************
+	filename：							ats_co_switchag.c
+	author：								ss
+	create data：						2011-6-24
+	description：						Switch表操作方法实现
+	modify history：              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+
+int ats_co_SwitchMsgSetDB(sqlite3 *db, ats_co_SwitchMsg *message)
+{
+	
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	//	(SwitchID,BlockAgainstThrowing,ClaimStatus,FreeStatus,InterlockingID,InterlockingName,SwitchName,
+  //		LeftToReverse,SwitchDirectionFlag,LockFlag,PositionFlag,SwitchFault)
+	
+	
+	sprintf(sqlstr, "update SWITCH set BlockAgainstThrowing = '%d',ClaimStatus = '%d',FreeStatus = '%d',LockFlag = '%d',PositionFlag = '%d' where SwitchID = '%d'",
+					message->blockAgainstThrowing,message->claimStatus,message->freeStatus,message->lockFlag,message->positionFlag,message->switchId);	 	 	
+					
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	printf("SQL: ret=%d, %s while running ats_co_SwitchMsgSetDB\n", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		printf("SQLerror: %s while running ats_co_SwitchMsgSetDB\n", errMsg);
+		return -1;
+	}
+	
+	
+	return 0;
+}
+
+
+int ats_co_SwitchMsgGetDB(sqlite3 *db, ats_co_SwitchMsg *message)
+{
+	return 0;
+}

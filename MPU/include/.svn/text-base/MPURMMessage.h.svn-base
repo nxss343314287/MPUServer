@@ -1,0 +1,256 @@
+/*******************************************************************
+filename      MPURMService.h
+author        root
+created date  2012-2-28
+description   specifications of implemented functions
+warning       				
+modify history
+    author        date        modify        description
+*******************************************************************/
+
+#ifndef MPURMSERVICE_H_
+#define MPURMSERVICE_H_
+
+#include "MPUConvert.h"
+#include "public.h"
+
+#define FILENAME_SIZE       256
+#define PERIOD_PROCESS_MSGNUM    800
+
+
+#ifdef  __cplusplus
+        extern "C" {
+#endif
+
+typedef enum _MODULEID{
+	SELFRM_MODULE=0,
+	RM_MODULE=1 ,
+	CO_MODULE=2	,
+	NET_MODULE=3 ,
+	CMM_MODULE=4 ,
+	RMM_MODULE=5 ,
+
+}MODULEID;
+
+typedef enum _MESSAGEID{
+	//rm send to mpu as follows:
+	RM_CO_LOCK_REQ=2,
+	RM_CO_UNLOCK_IND=3,
+	RM_CO_FRAME_SYN_REQ=4,
+	RM_CO_SYN_FILE_LOAD_REQ=5,
+	RM_CO_ROLE_IND=6,
+	// mpu send to rm as follows:
+	CO_RM_LOCK_RSP=8,
+	CO_RM_LOCK_EXPIRED_IND=9,
+	CO_RM_FRAME_SYN_IND=12,
+	CO_RM_FRAME_SYN_RSP=13,
+	CO_RM_SYN_FILE_LOAD_CNF=15,
+	}MESSAGEID;
+
+
+//7.4.1	RM_CO_HALT_IND
+//DestModuleID : bit(3) ::= 010  		2
+//MessageID : bit(5) ::= 00001				1
+//MessageBody := null
+//
+//7.4.2	RM_CO_LOCK_REQ
+//DestModuleID : bit(3) ::= 010			2
+//MessageID : bit(5) ::= 00010				2
+//MessageBody := <LOCK_REASON bit(8)>
+//		字段含义：
+//	RM请求CO进行加锁的原因。
+//			0000 0001 : 主备切换									1
+//			0000 0010 : 初始化数据同步						2
+
+//7.4.3	RM_CO_UNLOCK_IND
+//DestModuleID : bit(3) ::= 010			2
+//MessageID : bit(5) ::= 00011				3
+//MessageBody := null
+
+//7.4.4	RM_CO_FRAME_SYN_REQ
+//DestModuleID : bit(3) ::= 010			2
+//MessageID : bit(5) ::= 00100				4
+//MessageBody :=	<LATEST_FRAME_NUMBERR : bit(32)>
+//									<SYN_DATETIME : bit(32)>
+//		字段含义：
+//	LATEST_FRAME_NUMBER ( 32 bit field)
+//		需要处理到的最新一个输入帧的帧号，用4个字节表示,前一个字节为最高8位,最后一个字节为最低8位。
+//	SYN_DATETIME ( 32 bit field)
+//		备机在进行输入帧同步处理时所采纳的时间基准，该时间才用一个32位的整型数表示。用4个字节表示,前一个字节为最高8位,最后一个字节为最低8位。
+
+//7.4.5	RM_CO_SYN_FILE_LOAD_REQ
+//DestModuleID : bit(3) ::= 010			2
+//MessageID : bit(5) ::= 00101				5
+//MessageBody := null
+
+//7.4.6	RM_CO_ROLE_IND
+//DestModuleID : bit(3) ::= 010			2
+//MessageID : bit(5) ::= 00110				6
+//MessageBody := <RM_ROLE : bit(8)>
+//		字段含义：
+
+//RM to MPU packet data structure............................
+
+//RM_CO_LOCK_REQ
+typedef struct _RM_MPU_LOCK_REQ
+{
+   short iDesModuleID;
+   short iMessageID;
+   short iLength;
+   short iLockReason;
+} RM_MPU_LOCK_REQ;
+
+//RM_CO_UNLOCK_IND
+typedef struct _RM_MPU_UNLOCK_IND
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+} RM_MPU_UNLOCK_IND;
+
+//RM_CO_FRAME_SYN_REQ
+typedef struct _RM_MPU_FRAME_SYN_REQ
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+  NetTime sMPUSyncTime;
+  int   iHostID[PERIOD_PROCESS_MSGNUM];
+  int   seqNo[PERIOD_PROCESS_MSGNUM];
+  int   listnum;
+} RM_MPU_FRAME_SYN_REQ;
+
+//RM_CO_SYNC_FILE_LOAD_REQ
+typedef struct _RM_MPU_SYN_FILE_LOAD_REQ
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+} RM_MPU_SYN_FILE_LOAD_REQ;
+
+typedef struct _RM_MPU_ROLE_IND
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+  int 	roleState;
+} RM_MPU_ROLE_IND;
+
+
+
+
+
+//MPU to RM packet data structure............................
+
+//RM_CO_LOCK_RSP
+typedef struct _MPU_RM_LOCK_RSP
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+  short iLockReason;
+} MPU_RM_LOCK_RSP;
+
+//RM_CO_LOCK_RSP
+typedef struct _MPU_RM_LOCK_EXPIRED_IND
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+  short iLockReason;
+} MPU_RM_LOCK_EXPIRED_IND;
+
+//CO_RM_FRAME_SYN_IND
+typedef struct _MPU_RM_FRAME_SYN_IND
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+  NetTime sMPUSyncTime;
+  int   iHostID[PERIOD_PROCESS_MSGNUM];
+  int   seqNo[PERIOD_PROCESS_MSGNUM];
+  int   listnum;
+} MPU_RM_FRAME_SYN_IND;
+
+//CO_RM_FRAME_SYNC_RSP
+typedef struct _MPU_RM_FRAME_SYN_RSP
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+} MPU_RM_FRAME_SYN_RSP;
+
+//RM_CO_SYNC_FILE_LOAD_REQ
+typedef struct _MPU_RM_SYN_FILE_LOAD_CNF
+{
+  short iDesModuleID;
+  short iMessageID;
+  short iLength;
+} MPU_RM_SYN_FILE_LOAD_CNF;
+
+
+
+
+
+int rm_mpu_fifo_manager(sqlite3 *db, BYTE *buf, size_t len);
+int ats_mpu_initATSRMMessage(ATS_CO_MSG *handle);
+int ats_mpu_unpackATSRMMessage(ATS_CO_MSG *handle, const BYTE *buf, size_t len);
+//int ats_mpu_freeATSRMMessage(ATS_CO_MSG *handle);
+
+int
+ats_co_FramesyncMsgSetDB(sqlite3 *db, MPU_RM_FRAME_SYN_IND *message);
+int
+ats_co_FramesyncMsgGetDB(sqlite3 *db, MPU_RM_FRAME_SYN_IND *message);
+
+
+int
+RM_MPU_LOCK_REQ_ConvertFromBuffer(const BYTE buf[], RM_MPU_LOCK_REQ *message);
+int
+RM_MPU_LOCK_REQ_ConvertToBuffer( RM_MPU_LOCK_REQ *message,const BYTE buf[]);
+int
+RM_MPU_UNLOCK_IND_ConvertFromBuffer(const BYTE buf[], RM_MPU_UNLOCK_IND *message);
+int
+RM_MPU_UNLOCK_IND_ConvertToBuffer(RM_MPU_UNLOCK_IND *message, const BYTE buf[]);
+int
+RM_MPU_FRAME_SYN_REQ_ConvertFromBuffer(const BYTE buf[], RM_MPU_FRAME_SYN_REQ *message);
+int
+RM_MPU_FRAME_SYN_REQ_ConvertToBuffer(RM_MPU_FRAME_SYN_REQ *message,const BYTE buf[]);
+int
+RM_MPU_SYN_FILE_LOAD_REQ_ConvertFromBuffer(const BYTE buf[], RM_MPU_SYN_FILE_LOAD_REQ *message);
+int
+RM_MPU_SYN_FILE_LOAD_REQ_ConvertToBuffer(RM_MPU_SYN_FILE_LOAD_REQ *message,const BYTE buf[]);
+int
+RM_MPU_ROLE_IND_ConvertFromBuffer(const BYTE buf[], RM_MPU_ROLE_IND *message);
+int
+RM_MPU_ROLE_IND_ConvertToBuffer(RM_MPU_ROLE_IND *message,const BYTE buf[]);
+
+
+
+
+
+int
+MPU_RM_LOCK_RSP_ConvertFromBuffer(const BYTE buf[], MPU_RM_LOCK_RSP *message);
+int
+MPU_RM_LOCK_RSP_ConvertToBuffer( MPU_RM_LOCK_RSP *message,const BYTE buf[]);
+int
+MPU_RM_LOCK_EXPIRED_IND_ConvertFromBuffer(const BYTE buf[], MPU_RM_LOCK_EXPIRED_IND *message);
+int
+MPU_RM_LOCK_EXPIRED_IND_ConvertToBuffer( MPU_RM_LOCK_EXPIRED_IND *message,const BYTE buf[]);
+int
+MPU_RM_FRAME_SYN_IND_ConvertFromBuffer(const BYTE buf[], MPU_RM_FRAME_SYN_IND *message);
+int
+MPU_RM_FRAME_SYN_IND_ConvertToBuffer(MPU_RM_FRAME_SYN_IND *message,const BYTE buf[]);
+int
+MPU_RM_FRAME_SYN_RSP_ConvertFromBuffer(const BYTE buf[], MPU_RM_FRAME_SYN_RSP *message);
+int
+MPU_RM_FRAME_SYN_RSP_ConvertToBuffer(MPU_RM_FRAME_SYN_RSP *message,const BYTE buf[]);
+int
+MPU_RM_SYN_FILE_LOAD_CNF_ConvertFromBuffer(const BYTE buf[], MPU_RM_SYN_FILE_LOAD_CNF *message);
+int
+MPU_RM_SYN_FILE_LOAD_CNF_ConvertToBuffer(MPU_RM_SYN_FILE_LOAD_CNF *message,const BYTE buf[]);
+
+#ifdef  __cplusplus
+}
+#endif
+
+#endif /* MPURMSERVICE_H_ */

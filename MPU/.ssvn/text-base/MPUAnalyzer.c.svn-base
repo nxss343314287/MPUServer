@@ -1,0 +1,35 @@
+/*
+ * MPUAnalyzer.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: w.j
+ */
+#include "MPU.h"
+
+int MPUAnalyzer_initialize(MPUAnalyzer  *analyzer)
+{
+
+		return true;
+}
+
+//�ͷŷ����߳�
+int MPUAnalyzer_free(MPUAnalyzer  *analyzer)
+{
+
+		return true;
+}
+
+//�����߳���ͣ
+int MPUAnalyzer_pause(MPUAnalyzer  *analyzer)
+{
+
+		return true;
+}
+
+//�����̸߳�λ
+int MPUAnalyzer_resume(MPUAnalyzer  *analyzer)
+{
+
+		return true;
+}
+

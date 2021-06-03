@@ -1,0 +1,105 @@
+/**************************************************************************//**
+
+    @brief      Public definition for ATS framework.
+    @author     chenzl
+    @date       2011-07-11
+    @version    1.0
+    
+    @tablename{ Modify History }
+    @tablehead{ mender,  date,        modify,      description }
+    @tabledata{ chenzl,  2011-07-11,  All,         New issue.  }
+    @tablefoot
+    
+******************************************************************************/
+
+#ifndef _ATS_PUBLIC_H_
+#define _ATS_PUBLIC_H_
+
+/* System header files */
+#include <limits.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <signal.h>
+
+#include <sys/stat.h>
+
+#include <unistd.h>
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+
+/*-- Global defines --*/
+
+#define  TRUE   1
+#define  FALSE  0
+
+/* Return Value */
+#define  RT_ERR         -1
+#define  RT_OK          0
+
+/* Return Value - Error No. (1 - 0xFFFF reserved) */
+#define  E_COM_BEGIN    0x10000
+#define  E_NET_BEGIN    0x20000
+#define  E_IO_BEGIN     0x30000
+#define  E_CAS_BEGIN    0x40000
+#define  E_FEP_BEGIN    0x50000
+
+
+/*-- Global typedefs --*/
+typedef  unsigned char       BYTE;    /**< @brief  Type of 1-byte.  */
+typedef  unsigned short int  WORD;    /**< @brief  Type of 2-byte  */
+typedef  unsigned long int   DWORD;   /**< @brief  Type of 4-byte  */
+
+typedef  unsigned int        UInt;    /**< @brief  Platform related interger type  */
+typedef  unsigned short int  UShort;  /**< @brief  Type of 2-byte  */
+typedef  unsigned long int   ULong;   /**< @brief  Type of 4-byte  */
+
+typedef  int (*CompFunc)(void *data_p1, void *data_p2);
+typedef  int (*ProcFunc)(void *data_p, void *userdata_p);
+
+
+/*-- Global Functions --*/
+
+/**
+ * @brief   Function-like MAX.
+ * @warning Becareful don't use "i++" like code as a or b.
+ */
+#ifndef  MAX
+	#define  MAX(a,b)  ((a) > (b)? (a): (b))
+#endif
+
+/**
+ * @brief   Function-like MIN.
+ * @warning Becareful don't use "i++" like code as a or b.
+ */
+#ifndef  MIN
+	#define  MIN(a,b)  ((a) < (b)? (a): (b))
+#endif
+
+/**
+ * @brief Translate value into constant string.
+ */
+#define  PCHAR(v)  #v
+/**
+ * @brief Translate marco into constant string.
+ */
+#define  PCHAR_MARCO(m)  PCHAR(m)
+
+
+/* Project header files */
+#include "../log.h"
+#include "errno.h"
+#include "string.h"
+
+
+#ifdef __cplusplus
+	}
+#endif
+
+#endif /* _ATS_PUBLIC_H_ */

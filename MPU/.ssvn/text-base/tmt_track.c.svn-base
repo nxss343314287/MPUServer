@@ -1,0 +1,292 @@
+/***************************************************************//**
+   @file                           tmttrack.c
+   @author                         zhangxy
+   @date                           2011-08-01
+   @brief                          tmt of ats
+   @version                        1.0
+   @historyhead{author,         data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-08-01,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#include "cas_tmt.h"
+
+int tmt_tk_ConvertionTrackProcess(const int trackid, const int freeStatus)
+{
+    int direction;
+    int status;
+    int oldStatus;
+    ats_co_log_GetDirection (&direction,db,trackid);
+    ats_co_log_GetStatus (&status, db,trackid);
+    ats_co_log_GetOldATPVacancyStatus (&oldStatus, db,trackid);
+    if((oldStatus!=status)&&((status!=TMT_CTC_OCCUPY)||(status!=TMT_ITC_OCCUPY)||(status!=TMT_IXL_OCCUPY)))
+    {
+       int enterline;
+       if(direction==enterline)
+       {
+          if(freeStatus==TMT_OCCUPY)
+          {
+             Datetime datetime_str;
+             time_t  t;
+             struct tm* now;
+             struct timeval tv;
+             gettimeofday(&tv,NULL);
+             t=tv.tv_sec;
+             now=localtime(&t);
+             printf("%04d-%02d-%02d %02d:%02d:%02d",now -> tm_year + 1900, now -> tm_mon + 1, now -> tm_mday, now -> tm_hour, now -> tm_min, now -> tm_sec);
+             datetime_str.day=now -> tm_mday;
+             datetime_str.month=now -> tm_mon + 1;
+             datetime_str.year=now -> tm_year + 1900;
+             datetime_str.second=now -> tm_sec;
+             datetime_str.minute=now -> tm_min;
+             datetime_str.hour= now -> tm_hour;
+
+             ats_atr_FromTMTTrainEventProcess(TMT_TRAIN_START, TMT_DEFAULT_DATA, 0, ptid, datetime_str);
+             //int traintype;
+             //ats_co_tra_GetTrainType  (&traintype, db, const char *trainid);
+             int ITCoccupy;
+             if(status==ITCoccupy)
+             {
+            	 //ats_atr_FromTMTTrainEventProcess(TMT_TRAIN_ARRIVAL, int trainIndex, char *trainID, ptid, datetime_str);
+                //ToDo:����FEP�ӿڷ����г��������Ϣ
+             }
+             else
+             {
+                return 0;
+             }
+          }
+          else
+          {
+             return 0;
+          }
+       }
+       else if(direction==tmt_dir_exitline)
+       {
+          //freeStatus =TMT_CLEAR;
+          TrainIDs *trainids;
+          int num;
+          ats_co_trt_GetAssociatedTrainId (trainids, &num, db, trackid);
+        //  ats_co_tra_SetTrackingType();
+       }
+
+    }
+    else
+    {
+           //ToDo�������෴Ϊ�г����߹�����壿
+    	//ats_co_axt_GetAssociatedTrainId (trainids, &num, db, const int axlecounterid);
+        //  ats_tmt_DepotStepping();
+    }
+    return 0;
+}
+
+
+int tmt_tk_StationTrackProcess(const int trackid)
+{
+   TrainIDs *trainids;
+   int num;
+   ats_co_trt_GetAssociatedTrainId (trainids, &num, db, trackid);
+   if(trainids==0)
+   {
+       return -1;
+   }
+   while(trainids)
+   {
+      int track_ptid;
+      byte direction;
+      ats_co_log_GetAssociatedPlatformId (&track_ptid, db, trackid);
+      ats_atr_FromTMTRequireReversalStrategy(track_ptid, trainids->trainId, direction);
+      int traintype;
+      ats_co_tra_GetTrainType  (&traintype, db, trainids->trainId);
+      if(traintype!=TMT_CTC_OCCUPY)
+      {
+         int train_ptid;
+         ats_co_tra_GetAssociatedPlatformId  (&train_ptid, db, trainids->trainId);
+         int index;
+         ats_co_tra_GetIndex (&index, db,trainids->trainId);
+
+         if(track_ptid!=train_ptid)
+         {
+        	 Datetime eventTime;
+        	 int trainIndex;
+        	 ats_atr_FromTMTTrainEventProcess(TMT_TRAIN_ARRIVAL,trainIndex, trainids->trainId, track_ptid, eventTime);
+         }
+         else
+         {
+            int eventhandle;
+            ats_co_tra_GetTrainEventHandle  (&eventhandle, db, trainids->trainId);
+            break;
+         }
+         //ToDo:����ATR������ʹ����е�վ����
+
+      }
+      trainids++;
+   }
+   return 0;
+}
+
+
+int tmt_tk_DepartureTrackProcess(const int trackid,const int direction)
+{
+   TrainIDs *trainids=malloc(sizeof(TrainIDs));
+   int num;
+   ats_co_trt_GetAssociatedTrainId (trainids, &num, db, trackid);
+   if(trainids==0)
+   {
+     return -1;
+   }
+   while(trainids)
+   {
+      int trainType;
+      ats_co_tra_GetTrainType  (&trainType, db, trainids->trainId);
+      if(trainType!=TMT_CTC_TRAIN)
+      {
+          if(!TMT_DEPARTURE_TRACK)            //վ̨��ȥ��
+          {
+              int direction;
+              ats_co_log_GetDirection (&direction, db, trackid);
+              int tm_stamp;
+              if(direction==tm_stamp)
+              {
+                 time_t result;
+                 result = time(NULL);
+                 Datetime datetime_str;
+                 time_t  t;
+                 struct tm* now;
+                 struct timeval tv;
+                 gettimeofday(&tv,NULL);
+                 t=tv.tv_sec;
+                 now=localtime(&t);
+                 printf("%04d-%02d-%02d %02d:%02d:%02d",now -> tm_year + 1900, now -> tm_mon + 1, now -> tm_mday, now -> tm_hour, now -> tm_min, now -> tm_sec);
+                 datetime_str.day=now -> tm_mday;
+                 datetime_str.month=now -> tm_mon + 1;
+                 datetime_str.year=now -> tm_year + 1900;
+                 datetime_str.second=now -> tm_sec;
+                 datetime_str.minute=now -> tm_min;
+                 datetime_str.hour= now -> tm_hour;
+                 //ToDo:����TTA������ʹ������г���վ����
+                 //ats_atr_DepartureCallTTA(trackid, *trainids, datetime_str);
+              }
+
+          }
+
+      }
+      else
+      {
+         return -1;
+      }
+      trainids++;
+
+   }
+   free(trainids);
+   return 0;
+}
+
+int tmt_tk_PrestationTrackProcess(const int trackid)
+{
+    int platformid;
+    int dwellTime;
+    ats_co_log_GetAssociatedPlatformId (&platformid, db, trackid);
+    int autostate;
+    ats_co_pla_GetAutoState (&autostate,db,platformid);
+
+    if(!autostate)
+    {
+        int enforcestate;
+        ats_co_pla_GetEnforceState (&enforcestate, db,platformid);
+
+        if(!enforcestate)
+        {
+           return -1;
+        }
+    }
+    tmt_tk_TriggerTrackProcess(trackid,dwellTime);
+    return 0;
+}
+
+
+int tmt_tk_TriggerTrackProcess(const int trackid, int dwellTime)
+{
+    TrainIDs *trainids=malloc(sizeof(TrainIDs));
+    int num;
+    ats_co_trt_GetAssociatedTrainId (trainids, &num, db, trackid);
+    if(trainids)
+    {
+    	/*
+        if(ats_co_tra_GetTrainActiveStatus())
+        {
+            Datetime trggerTime;
+            int stationDwellTime;
+            int EquipmentType;
+            EquipmentType= ats_co_tra_GetEquipmentType();
+            ats_ars_add_requirement(trainids, EquipmentType, trackid, trggerTime, stationDwellTime);
+        }
+        */
+    }
+    else
+    {
+        return -1;
+    }
+    free(trainids);
+    return 0;
+}
+
+
+int tmt_tk_TrackOccpyProcess(const int trackid, int * physicalFree)
+{
+   int tracktype;
+   const int freeStatus;
+   const int direction;
+   int dwellTime;
+   ats_co_log_GetTrackType(&tracktype, db, trackid);
+   switch (tracktype)
+   {
+      case TMT_CONVERTION_TRACK:
+      {
+         tmt_tk_ConvertionTrackProcess(trackid, freeStatus );
+         break;
+      }
+
+      case TMT_STATION_TRACK:
+      case TMT_STATION_TRIGGER_TRACK:
+      case TMT_TURNBACK_TRACK:
+      case TMT_STATION_TURNBACKTRACK:
+      {
+    	  tmt_tk_StationTrackProcess(trackid);
+         break;
+      }
+      case TMT_DEPARTURE_TRACK:
+      case TMT_DEPARTURE_TRACK_UP:
+      case TMT_DEPARTURE_TRACK_DOWN:
+      {
+         tmt_tk_DepartureTrackProcess(trackid,direction);
+         break;
+      }
+
+      case TMT_PRE_STATION_TRACK:
+      {
+    	  tmt_tk_PrestationTrackProcess(trackid);
+         break;
+      }
+
+      case TMT_TRIGGER_TRACK:
+      {
+         tmt_tk_TriggerTrackProcess(trackid,dwellTime);
+         break;
+      }
+
+      default:
+         break;
+
+   }
+   return 0;
+}
+
+
+
+
+
+
+
+
+
+

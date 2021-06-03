@@ -1,0 +1,85 @@
+/*******************************************************************
+ filename      MPUCenter.h
+ author        root
+ created date  2012-1-9
+ description
+ warning
+ modify history
+ author        date        modify        description
+ *******************************************************************/
+
+#ifndef MPUCENTER_H_
+#define MPUCENTER_H_
+
+#include "MPUThreadRegistrationInfoList.h"
+#include "MPUReceiverPool.h"
+#include "MPUSenderPool.h"
+#include "MPUThreadSyncMutex.h"
+#include "MPUThreadScheduler.h"
+#include "MPU.h"
+#include "MPURMMessage.h"
+
+#ifdef  __cplusplus
+extern "C"
+  {
+#endif
+
+//#define RM_MPU_PIPE  "rm2mpu"
+//#define NET2IO_PIPE  "net2app"
+//#define IO2NET_PIPE  "app2net"
+
+#define RM_MPU_PIPE  "/fifo/rm2mpu"
+#define MPU_RM_PIPE  "/fifo/mpu2rm"
+#define NET2APP_PIPE  "/fifo/net2app"
+#define APP2NET_PIPE  "/fifo/app2net"
+
+typedef struct _MPUMasterSlaveSyncInfo
+{
+	u32 iMPUMasterSlaveID;
+	int slaveReceiveFrame;
+	int slaveReceiveFile;
+	RM_MPU_FRAME_SYN_REQ *frameSendFromMaster;
+} MPUMasterSlaveSyncInfo;
+typedef struct _MPUCenter
+{
+  int rm_mpu_pipe;
+  int io2net_pipe;
+  int net2io_pipe;
+  MPUThreadRegistrationInfoList *pMPUThreadRegistrationInfoList;
+  MPUMasterSlaveSyncInfo *pMasterSlaveSyncInfo;
+  MPUReceiverPool *pReceiverPool;
+  //MPUSenderPool *pSenderPool;
+  MPUTheadSyncMutex stReceiverPoolMutex;
+  MPUTheadSyncMutex stSenderPoolMutex;
+  MPUTheadSyncMutex stMasterSlaveSyncMutex;
+
+} MPUCenter;
+
+int
+mpuMasterSlaveSyncInfo_init(MPUMasterSlaveSyncInfo *info);
+//��ȡͬ����Ϣ
+
+//ˢ��ͬ����Ϣ
+int
+mpuMasterSlaveSyncInfo_refresh(MPUCenter *center, MPUMasterSlaveSyncInfo *info);\
+int
+mpuMasterSlaveSyncInfo_clock(MPUCenter *center);
+
+//���ͬ����Ϣ
+int
+mpuMasterSlaveSyncInfo_check(MPUMasterSlaveSyncInfo *info, u_int64 counter);
+int
+mpuMasterSlaveSyncInfo_free(MPUMasterSlaveSyncInfo *info);
+
+//MPUCenter��ʼ��
+MPUCenter *  mpuCenter_initialize(MPUCenter *pMPUCenter);
+
+//�ͷ�MPUCenter
+int
+mpuCenter_free(MPUCenter *pMPUCenter);
+
+#ifdef  __cplusplus
+}
+#endif
+
+#endif /* MPUCENTER_H_ */

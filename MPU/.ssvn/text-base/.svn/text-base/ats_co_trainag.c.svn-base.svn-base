@@ -1,0 +1,59 @@
+/*******************************************************************
+	filename��							ats_co_trainag.c
+	author��								ss
+	create data��						2011-6-20
+	description��						Train���������ʵ��
+	modify history��              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+
+
+
+
+
+/*******************************************************************
+	Function name��					ats_co_log_TrainEventMsgSetDB
+	description��						���trainindex�޸���ݿ����г��¼�����
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						message				����				TrackMsg	  ��������						
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����(��������)
+
+*******************************************************************/
+int ats_co_TrainEventMsgSetDB(sqlite3 *db, ats_co_TrainEventMsg *message)
+{
+	
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+
+	//!!!call process logical
+	trainEventToAtr(message);
+	 
+	
+	return 0;
+}
+
+
+
+/*******************************************************************
+	Function name��					ats_co_log_TrainEventMsgGetDB
+	description��						���trainindex��ȡ��ݿ��Ĺ����г���¼
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						message				����/���		TrackMsg	  ��������												
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����
+
+*******************************************************************/
+int ats_co_TrainEventMsgGetDB(sqlite3 *db, ats_co_TrainEventMsg *message)
+{
+	
+	return 0;
+}

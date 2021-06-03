@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE log4c SYSTEM "">
+
+<log4c version="1.2.1">
+
+	<config>
+		<bufsize>0</bufsize>
+		<debug level="2"/>
+		<nocleanup>0</nocleanup>
+		<reread>1</reread>
+	</config>
+
+	<category name="root" priority="notice"/>
+
+	<rollingpolicy name="myrollingpolicy" type="sizewin" maxsize="1024000" maxnum="100" />
+
+	<appender name="mpuserver" type="rollingfile" logdir="log" prefix="mpuserver_log" layout="dated" rollingpolicy="myrollingpolicy" />
+    <appender name="mpureceive" type="rollingfile" logdir="logreceive" prefix="mpureceive_log" layout="dated" rollingpolicy="myrollingpolicy" />
+    <appender name="mpuanalyzer" type="rollingfile" logdir="loganalyzer" prefix="mpuanalyzer_log" layout="dated" rollingpolicy="myrollingpolicy" />
+    <appender name="stdout" type="stream" layout="dated"/>
+	<appender name="stderr" type="stream" layout="basic"/>
+	<appender name="syslog" type="syslog" layout="basic"/>
+
+	<layout name="basic" type="basic"/>
+	<layout name="dated" type="dated_r"/>
+
+	<category name="mpuserver" priority="debug" appender="mpuserver"/>
+	<category name="mpureceive" priority="debug" appender="mpureceive"/>
+	<category name="mpuanalyzer" priority="debug" appender="mpuanalyzer"/>
+	<category name="fep_client_emulator" priority="debug" appender="myrollingfileappender"/>
+	<category name="cas_client_emulator" priority="debug" appender="myrollingfileappender"/>
+
+</log4c>
+

@@ -1,0 +1,1147 @@
+/*******************************************************************
+	filename��								ats_co_message.c
+	author��									w.j.
+	create data��						05-Aug-2011
+	description��						COģ�鱨�Ĳ�⡢���ʵ��
+	detailed description��                     
+  warning��                   
+	modify history��              
+	author			data(modify)		modify(list)	description
+	w.j.			09-Oct-2011
+********************************************************************/
+
+#include "ats_co_message.h"
+#include "ats_co_server.h"
+
+
+
+//����������ת������������ö�Ӧ�б�
+//�����������=(���������� *Ԫ��������)
+//total_type = $number(message_type) * $number(element_type)
+//format : {
+//					index,
+//					message_type,	element_type,
+//					ats_co_bufferConverToMsgFunc,
+//   				ats_co_msgConverToBufferFunc,
+//   				ats_co_setDBFunc,
+//					ats_co_getDBFunc,
+//   		}
+#define MESSAGE_TYPE_NUMBER  	15
+#define MESSAGE_ATTRIBUTER_NUMBER  		7
+
+const char *ConversationConfig[MESSAGE_TYPE_NUMBER][MESSAGE_ATTRIBUTER_NUMBER] =
+{
+	{"1","400","207","ats_co_bufferConvertToTrackMsg","ats_co_trackMsgConvertToBuffer","ats_co_TrackMsgSetDB","ats_co_TrackMsgGetDB"},
+	{"2","400","151","ats_co_BufferConvertToTrainStatusMsg","ats_co_TrainStatusMsgConvertToBuffer","ats_co_TrainStatusMsgSetDB","ats_co_TrainStatusMsgGetDB"},
+	{"3","434","151","ats_co_BufferConvertToTrainEventMsg","ats_co_TrainEventMsgConvertToBuffer","ats_co_TrainEventMsgSetDB","ats_co_TrainEventMsgGetDB"},
+	{"4","400","26","ats_co_BufferConvertToPlatformMsg","ats_co_PlatformMsgConvertToBuffer","ats_co_PlatformMsgSetDB","ats_co_PlatformMsgGetDB"},
+	{"5","400","200","ats_co_BufferConvertToSwitchMsg","ats_co_SwitchMsgConvertToBuffer","ats_co_swi_SwitchMsgSetDB","ats_co_SwitchMsgGetDB"},
+	{"6","400","201","ats_co_BufferConvertToSignalMsg","ats_co_SignalMsgConvertToBuffer","ats_co_SignalMsgSetDB","ats_co_SignalMsgGetDB"},
+	{"7","400","213","ats_co_BufferConvertToAxleCounterMsg","ats_co_AxleCounterMsgConvertToBuffer","ats_co_AxleCounterMsgSetDB","ats_co_AxleCounterMsgGetDB"},
+	{"8","400","203","ats_co_BufferConvertToCrossingMsg","","",""},
+	{"9","400","158","ats_co_BufferConvertToAreaStatusMsg","","",""},
+	{"10","400","157","ats_co_BufferConvertToTrainPositionReport","","",""},
+	{"11","400","204","ats_co_BufferConvertToRouteStatusMsg","","",""},
+	{"12","433","237","ats_co_BufferConvertToErrIndicationMsg","","",""},
+	{"13","433","213","ats_co_BufferConvertToErrIndicationMsg","","",""},
+	{"14","433","154","ats_co_BufferConvertToErrIndicationMsg","","",""},
+	{"15","433","151","ats_co_BufferConvertToErrIndicationMsg","","",""},
+};
+
+/*******************************************************************
+ Function name			ats_co_travelConversionConfig
+ description			search configuration of message using message
+ 	 	 	 	 	 	type and element type
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_travelConversationConfig(ATS_CO_MSG *handle)
+{
+//if we have set message_tpye and element_tpye value ,
+//then we can travel configuration list to get index value and configuration of functions
+	int i,j,re;
+	for(i=0;i<MESSAGE_TYPE_NUMBER;i++)
+	{
+		for(j=0;j<MESSAGE_ATTRIBUTER_NUMBER;j++)
+		{			
+			/*
+			if (((strcmp(ConversationConfig[i][j],handle->config.message_type))==0)&&
+				((strcmp(ConversationConfig[i][j+1],handle->config.element_type))==0))
+			*/
+			
+			re=atoi(ConversationConfig[i][j]);
+			if(re!=0)
+			if (((atoi(ConversationConfig[i][j])==handle->config.message_type))&&
+				((atoi(ConversationConfig[i][j+1])==handle->config.element_type)))
+			{	
+				DLOG(cat,"ConversationConfig[i][j]=%s,%s",ConversationConfig[i][j],ConversationConfig[i][j+1]);				
+				handle->config.index=atoi(ConversationConfig[i][j-1]);								
+				strcpy(handle->config.bufferConverToMsgFuncName,ConversationConfig[i][j+2]);						
+				strcpy(handle->config.msgConverToBufferFuncName,ConversationConfig[i][j+3]);
+				strcpy(handle->config.ats_co_setDBFuncName,ConversationConfig[i][j+4]);
+				strcpy(handle->config.ats_co_getDBFuncName,ConversationConfig[i][j+5]);		
+				continue;				
+			}				
+		}		
+	}
+	
+	//to check parse is correct
+	if(handle->config.index<=0)
+	{
+		ELOG(cat,"Pattern mode(type=%d,element=%d) is not exist",handle->config.message_type,handle->config.element_type);
+		return false;			
+	}
+	return true;
+}
+
+/*******************************************************************
+ Function name			ats_co_initMessageValue
+ description			initialize data structure of message handle
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_initMessageValue(ATS_CO_MSG *handle)
+{					
+	int i=0;	
+		
+	while(i<handle->fixed_len) 
+	{		
+		DLOG(cat,"<%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]><%d[%02x]>",
+		i,*(handle->format+i),i+1,*(handle->format+i+1),i+2,*(handle->format+i+2),i+3,*(handle->format+i+3),i+4,*(handle->format+i+4),
+		i+5,*(handle->format+i+5),i+6,*(handle->format+i+6),i+7,*(handle->format+i+7),i+8,*(handle->format+i+8),i+9,*(handle->format+i+9));
+		i+=10;
+	}
+	
+	//get message type here	
+	handle->config.message_type=(u_int32)bytes2int(handle->format+1,SHT2BYTE);	
+	//get element type here	
+	handle->config.element_type=(u_int32)bytes2int(handle->format+6,CHAR2BYTE);	
+	
+	//get index value and names of all functions
+	if(	ats_co_travelConversationConfig(handle)==false )
+	{
+		return false;
+	}
+	
+	//to set addresses of functions and message body
+	//here we should do every things of initialization 
+	switch (handle->config.index)
+	{
+		case 1://ats_co_TrackMsg
+			handle->message=malloc(sizeof(ats_co_TrackMsg));
+			memset(handle->message,0,sizeof(ats_co_TrackMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToTrackMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_TrackMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_TrackMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_TrackMsgGetDB;
+			break;
+		case 2://ats_co_TrainStatusMsg
+			handle->message=malloc(sizeof(ats_co_TrainStatusMsg));
+			memset(handle->message,0,sizeof(ats_co_TrainStatusMsg));
+			handle->bufferConvertToMsgFunc=(void*)ats_co_BufferConvertToTrainStatusMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_TrainStatusMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_TrainStatusMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_TrainStatusMsgGetDB;
+			break;
+		case 3://ats_co_TrainEventMsg
+			handle->message=malloc(sizeof(ats_co_TrainEventMsg));
+			memset(handle->message,0,sizeof(ats_co_TrainEventMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToTrainEventMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_TrainEventMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_TrainEventMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_TrainEventMsgGetDB;
+			break;
+		case 4:// ����վ̨���� 
+			handle->message=malloc(sizeof(ats_co_PlatformMsg));
+			memset(handle->message,0,sizeof(ats_co_PlatformMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToPlatformMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_PlatformMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_PlatformMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_PlatformMsgGetDB;
+			break;
+		case 5:// ������?�� 
+			handle->message=malloc(sizeof(ats_co_SwitchMsg));
+			memset(handle->message,0,sizeof(ats_co_SwitchMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToSwitchMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_SwitchMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_SwitchMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_SwitchMsgGetDB;
+			break;
+		case 6:// �����źŻ��� 
+			handle->message=malloc(sizeof(ats_co_SignalMsg));
+			memset(handle->message,0,sizeof(ats_co_SignalMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToSignalMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_SignalMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_SignalMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_SignalMsgGetDB;
+			break;
+		case 7:// ������ᱨ�� 			
+			handle->message=malloc(sizeof(ats_co_AxleCounterMsg));
+			memset(handle->message,0,sizeof(ats_co_AxleCounterMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToAxleCounterMsg;
+			handle->msgConvertToBufferFunc=(void *)ats_co_AxleCounterMsgConvertToBuffer;
+			handle->setDBFunc=(void *)ats_co_AxleCounterMsgSetDB;
+			handle->getDBFunc=(void *)ats_co_AxleCounterMsgGetDB;
+			break;
+		case 8://岔心
+			handle->message=malloc(sizeof(ats_co_CrossingMsg));
+			memset(handle->message,0,sizeof(ats_co_CrossingMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToCrossingMsg;
+			break;
+		case 9://区域状态
+			handle->message=malloc(sizeof(ats_co_AreaStatusMsg));
+			memset(handle->message,0,sizeof(ats_co_AreaStatusMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToAreaStatusMsg;
+			break;
+		case 10://列车位置报告
+			handle->message=malloc(sizeof(ats_co_TrainPositionReport));
+			memset(handle->message,0,sizeof(ats_co_TrainPositionReport));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToTrainPositionReport;
+			break;
+		case 11://进路状态
+			handle->message=malloc(sizeof(ats_co_RouteStatusMsg));
+			memset(handle->message,0,sizeof(ats_co_RouteStatusMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToRouteStatusMsg;
+			break;
+		case 12://轨旁控制单元（WCU）的错误指示报文
+			handle->message=malloc(sizeof(ats_co_ErrIndicationMsg));
+			memset(handle->message,0,sizeof(ats_co_ErrIndicationMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToErrIndicationMsg;
+			break;
+		case 13://计轴/轨道电路的错误指示报文
+			handle->message=malloc(sizeof(ats_co_ErrIndicationMsg));
+			memset(handle->message,0,sizeof(ats_co_ErrIndicationMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToErrIndicationMsg;
+			break;
+		case 14://车载的错误指示报文
+			handle->message=malloc(sizeof(ats_co_ErrIndicationMsg));
+			memset(handle->message,0,sizeof(ats_co_ErrIndicationMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToErrIndicationMsg;
+			break;
+		case 15://列车错误指示报文
+			handle->message=malloc(sizeof(ats_co_ErrIndicationMsg));
+			memset(handle->message,0,sizeof(ats_co_ErrIndicationMsg));
+			handle->bufferConvertToMsgFunc=(void *)ats_co_BufferConvertToErrIndicationMsg;
+			//handle->logicalMsgFunc=(void*)logical_process;
+			break;
+		default:
+			return ERROR_MESSAGE_TYPE;
+			break;
+	}		
+	return true;
+}
+
+/*******************************************************************
+ Function name			ats_co_packNetHeader
+ description			convert message header of net layer to bytes buffer
+ parameter
+ 	 message_header_t *		IN	 		msg
+ 	 BYTE		*			OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_packNetHeader(message_header_t *msg, BYTE *buf)
+{					 		 			
+	if((int2bytes(&buf[0],LONGLONG2BYTE,msg->timestamp))!=0)
+		return -1;
+ 	if((int2bytes(&buf[8],INT2BYTE,msg->seqno))!=0)
+ 		return -1;
+ 	if((int2bytes(&buf[12],CHAR2BYTE,msg->srcno))!=0)
+ 		return -1;
+ 	if((int2bytes(&buf[13],CHAR2BYTE,msg->destno))!=0)
+ 		return -1;
+    if((int2bytes(&buf[14],CHAR2BYTE,msg->srcmodule))!=0)
+    	return -1;
+    if((int2bytes(&buf[15],CHAR2BYTE,msg->destmodule))!=0)
+    	return -1;
+    if((int2bytes(&buf[16],SHT2BYTE,msg->datatype))!=0)
+    	return -1;
+    if((int2bytes(&buf[18],CHAR2BYTE,msg->protocoltype))!=0)
+    	return -1;
+    if((int2bytes(&buf[19],CHAR2BYTE,msg->mainorbak))!=0)
+    	return -1; 
+    if((int2bytes(&buf[20],SHT2BYTE,msg->remain))!=0)
+    	return -1;    
+    if((int2bytes(&buf[22],SHT2BYTE,msg->datalen))!=0)
+    	return -1;    	    
+    return true;
+}
+
+/*******************************************************************
+ Function name			ats_co_parseNetHeader
+ description			get message data from bytes buffer
+ 	 	 	 	 	 	type and element type
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+     BYTE	*			OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_parseNetHeader(ATS_CO_MSG *handle,BYTE *buf)
+{	
+		BYTE *po;
+	
+		po=buf;
+		handle->header.timestamp=(u_int32)bytes2int(po,LONGLONG2BYTE);
+		po=po+8;
+	 	handle->header.seqno=(u_int32)bytes2int(po,INT2BYTE);
+	 	po=po+4;
+	 	handle->header.srcno=(u_int32)bytes2int(po,CHAR2BYTE);
+	 	po=po+1;
+	 	handle->header.destno=bytes2int(po,CHAR2BYTE);	
+	 	po=po+1;
+    handle->header.srcmodule=(u_int32)bytes2int(po,CHAR2BYTE);
+    po=po+1;
+    handle->header.destmodule=(u_int32)bytes2int(po,CHAR2BYTE);
+    po=po+1;
+    handle->header.datatype=(u_int32)bytes2int(po,SHT2BYTE);
+    po=po+2;
+    handle->header.protocoltype=(u_int32)bytes2int(po,CHAR2BYTE);
+    po=po+1;
+    handle->header.mainorbak=(u_int32)bytes2int(po,CHAR2BYTE); 
+    po=po+1;
+    handle->header.remain=(u_int32)bytes2int(po,SHT2BYTE);
+    po=po+2;
+    handle->header.datalen=(u_int32)bytes2int(po,SHT2BYTE);
+
+    return true;
+}
+
+/*******************************************************************
+ Function name			ats_co_initATSCOMessage
+ description			initialize message handle totally
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ 	 const BYTE *		IN 			buf
+ 	 size_t 			IN 			len
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_initATSCOMessage(ATS_CO_MSG *handle,const BYTE *buf,size_t len)
+{
+	//buffer contains net header ,length = net header size + packet size		
+	//to parse net header firstly	
+	
+	//allocate memory for format bytes
+	handle->fixed_len=(int)bytes2int(buf+3+MSG_HEADER_LEN,CHAR2BYTE);	
+	
+	DLOG(cat,"packet len=%d",handle->fixed_len);
+	handle->format=malloc(handle->fixed_len);	
+	memset(handle->format,0,handle->fixed_len);				
+	memcpy(handle->format,buf+MSG_HEADER_LEN,handle->fixed_len);
+	
+	//allocate config struct
+	//handle->config=malloc(sizeof(sConversationConfig));
+	//memset(handle->config,0,sizeof(sConversationConfig));	
+	if(handle->config.bufferConverToMsgFuncName==NULL)
+		handle->config.bufferConverToMsgFuncName=malloc(MAX_NAME_LEN);
+	if(handle->config.msgConverToBufferFuncName==NULL)
+		handle->config.msgConverToBufferFuncName=malloc(MAX_NAME_LEN);
+	if(handle->config.ats_co_setDBFuncName==NULL)
+		handle->config.ats_co_setDBFuncName=malloc(MAX_NAME_LEN);
+	if(handle->config.ats_co_getDBFuncName==NULL)
+		handle->config.ats_co_getDBFuncName=malloc(MAX_NAME_LEN);
+				
+	//according  to identifier (here type and element) of packet ,
+	//we must decide to how to set name and structure of conversion function.
+	//on the other hand, also to allocate memory for message handle which used type
+	if (ats_co_initMessageValue(handle)==false) 
+	{		
+		return false ;
+	}		
+	//here we have not allocated memory for handle->message 		
+	//so when we do it ? it's a void point really.	
+	return true;
+}
+
+/*******************************************************************
+ Function name			ats_co_freeATSCOMessage
+ description			free message handle
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_freeATSCOMessage(ATS_CO_MSG *handle)
+{
+	//free member's memory
+	if(handle->format!=NULL) free(handle->format);
+	
+	//free message contain	
+	if(handle->message!=NULL) free(handle->message);
+	
+	//free handle of calling functions 									
+  	//free handle of config	
+  if(handle->config.bufferConverToMsgFuncName!=NULL)
+		free(handle->config.bufferConverToMsgFuncName);
+	if(handle->config.msgConverToBufferFuncName!=NULL)
+		free(handle->config.msgConverToBufferFuncName);
+	if(handle->config.ats_co_setDBFuncName!=NULL)
+		free(handle->config.ats_co_setDBFuncName);
+	if(handle->config.ats_co_getDBFuncName!=NULL)
+		free(handle->config.ats_co_getDBFuncName);
+	//if(handle->config!=NULL) free(handle->config);
+	if(handle!=NULL)	free(handle);
+	
+	return true;
+}
+
+
+
+/*******************************************************************
+ Function name			ats_co_logATSCOMessage
+ description
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_logATSCOMessage(ATS_CO_MSG *handle)
+{
+	//ats_co_TrackMsg *msg;
+	//msg=malloc(sizeof(ats_co_TrackMsg));	
+	switch (handle->config.index)
+	{
+		case 1://ats_co_TrackMsg
+			//ats_co_logTrackMsg(handle->message);
+			break;
+		case 2:
+			break;
+		case 3:
+			break;
+		case 4:
+			break;
+		case 5:
+			break;
+		case 6:
+			break;
+		case 7:
+			break;
+		default:
+			break;
+	}
+	return true;	
+}
+
+/*******************************************************************
+ Function name			ats_co_unpackATSCOMessage
+ description			get message data from formated buffer contained by handle
+ parameter
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_unpackATSCOMessage(ATS_CO_MSG *handle)
+{
+	//the task is to parse format message to message struct by calling parse function
+	//we also know that message have memory at this time .it's important.	
+	handle->bufferConvertToMsgFunc(handle->format,handle->message);		 	  
+  	return true;   
+}
+
+/*******************************************************************
+ Function name			ats_co_refreshDBATSCOMessage
+ description			refresh data of message contained by handle to db
+ parameter
+ 	 sqlite3			IN			db
+ 	 ATS_CO_MSG *		IN	 		handle
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_refreshDBATSCOMessage(sqlite3 *db,ATS_CO_MSG *handle)
+{
+ 	//functions for database accessing 
+  handle->setDBFunc(db,handle->message);    
+ 	return true; 
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToTrackMsg
+ description            convert bytes buffer to logical track message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_TrackMsg *				OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//TrackMsg���Ļ���ת������
+int ats_co_BufferConvertToTrackMsg(const BYTE buf[] ,ats_co_TrackMsg  *message)
+{	
+ 	//now, have know the type of message structure, we can allocate memory for this pointer.
+ 	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 	
+ 	message->trackid=(u_int32)bytes2int(&buf[7],SHT2BYTE); 	 	
+ 	message->direction=countValueofBits(buf[12],6,2);
+ 	message->lockFlag=countValueofBits(buf[11],3,1);		
+ 	message->freeStatus=countValueofBits(buf[11],2,1);	
+ 	message->status=countValueofBits(buf[22],3,3); 										
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_TrackMsgConvertToBuffer
+ description            convert logical track message to bytes buffer
+ parameter
+ 	 ats_co_TrackMsg *				IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_TrackMsgConvertToBuffer(ats_co_TrackMsg *message,  BYTE buf[])
+{		
+ 	if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+ 		return -1;	 			 	 		 		 
+ 	if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+ 		return -1;	 			 		 	
+ 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+ 		return -1;	 			 	 		 	
+ 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[7],SHT2BYTE,message->trackid)!=0)	 		
+ 		return -1;	 			 	
+ 	if(setBitsOfByte(&buf[12],6,2,message->direction)!=0)
+ 		return -1;	 	
+ 	if(setBitsOfByte(&buf[11],3,1,message->lockFlag)!=0)
+ 		return -1;	 	
+ 	if(setBitsOfByte(&buf[11],2,1,message->freeStatus)!=0)
+ 		return -1;	 		 	
+ 	if(setBitsOfByte(&buf[22],3,3,message->status)!=0)
+ 		return -1;	 		 			 		 		 		 		   	 		 		 	
+ 	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToTrainStatusMsg
+ description            convert bytes buffer to train status message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_TrainStatusMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//TrainStatusMsg���Ļ�����ת������
+int ats_co_BufferConvertToTrainStatusMsg(const BYTE buf[] ,ats_co_TrainStatusMsg *message )
+{	
+		message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+	 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+	 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+	 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+	 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 		
+	 	message->trainindex=(u_int32)bytes2int(&buf[7],SHT2BYTE); 	 	
+	 	message->service=(u_int32)bytes2int(&buf[38],SHT2BYTE);
+	 	message->serial=(u_int32)bytes2int(&buf[40],CHAR2BYTE); 	 	 	 	
+	 	message->line=(u_int32)bytes2int(&buf[43],CHAR2BYTE); 	 	 	 	
+	 	message->driver=(u_int32)bytes2int(&buf[41],SHT2BYTE);
+	 	message->car1=(u_int32)bytes2int(&buf[44],CHAR2BYTE); 	 	 	 	
+	 	message->car2=(u_int32)bytes2int(&buf[45],CHAR2BYTE); 	 	 	 	
+	 	message->ebIsApplied=countValueofBits(buf[13],0,1);
+	 	message->ebReason=countValueofBits(buf[14],0,3);
+	 	message->trainDoorStatus=countValueofBits(buf[12],0,2);
+	 	message->controlLevel=countValueofBits(buf[15],0,2);	
+	 	message->obcuFailure=countValueofBits(buf[22],1,1);			 		 			
+		return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_TrainStatusMsgConvertToBuffer
+ description            convert train status  message to bytes buffer
+ parameter
+ 	 ats_co_TrainStatusMsg *		IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_TrainStatusMsgConvertToBuffer(ats_co_TrainStatusMsg *message, BYTE buf[])
+{
+	 if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+		return -1;	 			
+	 if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+		return -1;	 			 		 	
+	 if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+	 	return -1;	 			 	 		 	
+	 if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[7],SHT2BYTE,message->trainindex)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[38],SHT2BYTE,message->service)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[40],CHAR2BYTE,message->serial)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[43],CHAR2BYTE,message->line)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[41],SHT2BYTE,message->driver)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[44],CHAR2BYTE,message->car1)!=0)	 		
+	 	return -1;	 		
+	 if(int2bytes(&buf[45],CHAR2BYTE,message->car2)!=0)	 		
+	 	return -1;		 			 			 		
+	 if(setBitsOfByte(&buf[13],0,1,message->ebIsApplied)!=0)
+	 	return -1;	 	
+	 if(setBitsOfByte(&buf[14],0,3,message->ebReason)!=0)
+	 	return -1;	 	
+	 if(setBitsOfByte(&buf[12],0,2,message->trainDoorStatus)!=0)
+	 	return -1;	 	
+	 if(setBitsOfByte(&buf[15],0,2,message->controlLevel)!=0)
+	 	return -1;	 
+	 if(setBitsOfByte(&buf[22],1,1,message->obcuFailure)!=0)
+	 	return -1;			 			 		
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToTrainEventMsg
+ description            convert bytes buffer to train event message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_TrainEventMsg *			OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//TrainEventMsg���Ļ�����ת������
+int ats_co_BufferConvertToTrainEventMsg(const BYTE buf[] ,ats_co_TrainEventMsg  *message )
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 			 	
+	message->index=(u_int32)bytes2int(&buf[7],SHT2BYTE); 	
+	message->eventTime.minute=(u_int32)bytes2int(&buf[9],CHAR2BYTE);
+	message->eventTime.hour=(u_int32)bytes2int(&buf[10],CHAR2BYTE); 
+	message->eventTime.day=(u_int32)bytes2int(&buf[11],CHAR2BYTE); 
+	message->eventTime.month=(u_int32)bytes2int(&buf[12],CHAR2BYTE); 
+	message->eventTime.year=(u_int32)bytes2int(&buf[13],CHAR2BYTE); 
+	message->trainToPtEvent=(u_int32)bytes2int(&buf[14],SHT2BYTE); 	 	
+	message->eventCause=(u_int32)bytes2int(&buf[16],SHT2BYTE);
+	message->PTID=(u_int32)bytes2int(&buf[18],CHAR2BYTE);
+		
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_TrainEventMsgConvertToBuffer
+ description            convert train event message to bytes buffer
+ parameter
+ 	 ats_co_TrainEventMsg *			IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_TrainEventMsgConvertToBuffer(ats_co_TrainEventMsg *message, BYTE buf[])
+{
+
+	if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+ 		return -1;	 			
+	if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+ 		return -1;	 			 		 	
+ 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+ 		return -1;	 			 	 		 	
+ 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[7],SHT2BYTE,message->index)!=0)	 		
+ 		return -1;	 	
+	if(int2bytes(&buf[9],CHAR2BYTE,message->eventTime.minute)!=0)
+ 		return -1;	
+	if(int2bytes(&buf[10],CHAR2BYTE,message->eventTime.hour)!=0)	 		
+ 		return -1;	
+	if(int2bytes(&buf[11],CHAR2BYTE,message->eventTime.day)!=0)	 		
+ 		return -1;	
+	if(int2bytes(&buf[12],CHAR2BYTE,message->eventTime.month)!=0)	 		
+ 		return -1;	
+    if(int2bytes(&buf[13],CHAR2BYTE,message->eventTime.year)!=0)	 		
+ 		return -1;	
+ 	if(int2bytes(&buf[14],SHT2BYTE,message->trainToPtEvent)!=0)	 		
+ 		return -1;	 			 	
+ 	if(int2bytes(&buf[16],SHT2BYTE,message->eventCause)!=0)	 		
+ 		return -1;	 
+	if(int2bytes(&buf[18],CHAR2BYTE,message->PTID)!=0)	 		
+ 		return -1;
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToPlatformMsg
+ description            convert bytes buffer to platform message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_PlatformMsg *			OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToPlatformMsg(const BYTE buf[] ,ats_co_PlatformMsg  *message )
+{
+
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 			
+ 	message->platform=(u_int32)bytes2int(&buf[7],SHT2BYTE);	 	 			 	
+ 	message->enforceState=countValueofBits(buf[20],4,2);
+ 	message->autoState=countValueofBits(buf[21],7,1);				
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_PlatformMsgConvertToBuffer
+ description            convert platform message to bytes buffer
+ parameter
+ 	 ats_co_PlatformMsg *			IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_PlatformMsgConvertToBuffer(ats_co_PlatformMsg *message, BYTE buf[])
+{
+		if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+	 		return -1;	 			
+		if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+	 		return -1;	 			 		 	
+	 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+	 		return -1;	 			 	 		 	
+	 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+	 		return -1;	 		
+	 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+	 		return -1;	 		
+	 	if(int2bytes(&buf[7],SHT2BYTE,message->platform)!=0)	 		
+	 		return -1;	 			 		 			 		
+	 	if(setBitsOfByte(&buf[20],4,2,message->enforceState)!=0)
+	 		return -1;	 
+	 	if(setBitsOfByte(&buf[21],7,1,message->autoState)!=0)
+	 		return -1;			 					
+		return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToSwitchMsg
+ description            convert bytes buffer to switch message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_SwitchMsg *				OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//SwitchMsg���Ļ�����ת������
+int ats_co_BufferConvertToSwitchMsg(const BYTE buf[] ,ats_co_SwitchMsg  *message)
+{
+		
+		message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+	 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+	 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+	 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+	 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 			
+	 	message->switchId=(u_int32)bytes2int(&buf[7],SHT2BYTE);	 	
+	 		 	 			 		 									
+		//message->positionFlag=countValueofBits(buf[11],2,1);	  	
+		message->claimStatus=countValueofBits(buf[11],3,2);	  	
+  	message->blockAgainstThrowing=countValueofBits(buf[12],2,1);	
+  	message->lockFlag=countValueofBits(buf[12],4,1);	
+  	message->freeStatus=countValueofBits(buf[11],7,1);	
+  	message->pointTrailed=countValueofBits(buf[11],0,1);	
+  	message->supervision=countValueofBits(buf[12],1,1);	
+  	message->position=countValueofBits(buf[11],6,1);	
+						
+	  if (message->pointTrailed==1) message->positionFlag = 3;
+       else if (message->pointTrailed==0)
+          {
+             if (message->supervision==0) message->positionFlag = 0;                    
+             else if (message->supervision==1)
+             {
+             	if (message->position==0)                	
+             		message->positionFlag = 2;                        
+              else	if (message->position==1)
+                      message->positionFlag = 1;                        
+             	}          		
+          }		
+		return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_SwitchMsgConvertToBuffer
+ description            convert switch message to bytes buffer
+ parameter
+ 	 ats_co_SwitchMsg *				IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_SwitchMsgConvertToBuffer(ats_co_SwitchMsg *message, BYTE buf[])
+{
+	
+		if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+	 		return -1;	 			
+		if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+	 		return -1;	 			 		 	
+	 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+	 		return -1;	 			 	 		 	
+	 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+	 		return -1;	 		
+	 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+	 		return -1;	 		
+	 	if(int2bytes(&buf[7],SHT2BYTE,message->switchId)!=0)	 		
+	 		return -1;	 			 		 			 		
+	 	if(setBitsOfByte(&buf[11],3,2,message->claimStatus)!=0)
+	 		return -1;	 
+	 	if(setBitsOfByte(&buf[12],2,1,message->blockAgainstThrowing)!=0)
+	 		return -1;	 
+	 	if(setBitsOfByte(&buf[12],4,1,message->lockFlag)!=0)
+	 		return -1;	 
+	 	if(setBitsOfByte(&buf[11],7,1,message->freeStatus)!=0)
+	 		return -1;	 	
+	 	if(setBitsOfByte(&buf[11],0,1,message->pointTrailed)!=0)
+	 		return -1;	 
+		if(setBitsOfByte(&buf[12],1,1,message->supervision)!=0)
+	 		return -1;	 
+	 	if(setBitsOfByte(&buf[11],6,1,message->position)!=0)
+	 		return -1;	 
+		return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToSignalMsg
+ description            convert bytes buffer to signal message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_SignalMsg *				OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//SignalMsg���Ļ�����ת������
+int ats_co_BufferConvertToSignalMsg(const BYTE buf[] ,ats_co_SignalMsg  *message )
+{	
+		message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+	 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+	 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+	 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+	 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 			
+	 	message->signalId=(u_int32)bytes2int(&buf[7],SHT2BYTE);	 		 			 	
+	 	message->signalStatus=countValueofBits(buf[11],4,3);	
+	 	message->signalAutoStatus=countValueofBits(buf[12],2,2);	
+	 	message->lockFlag=countValueofBits(buf[12],1,1);	
+	 	message->signalFault=countValueofBits(buf[13],4,1);		 		 			
+		return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_SignalMsgConvertToBuffer
+ description            convert signal message to bytes buffer
+ parameter
+ 	 ats_co_SignalMsg *				IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_SignalMsgConvertToBuffer(ats_co_SignalMsg *message, BYTE buf[])
+{			
+	if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+ 		return -1;	 			
+	if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+ 		return -1;	 			 		 	
+ 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+ 		return -1;	 			 	 		 	
+ 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[7],SHT2BYTE,message->signalId)!=0)	 		
+ 		return -1;	 			 		 			 			 		
+ 	if(setBitsOfByte(&buf[11],4,3,message->signalStatus)!=0)
+ 		return -1;	 	 		
+ 	if(setBitsOfByte(&buf[12],2,2,message->signalAutoStatus)!=0)
+ 		return -1;	 	 		
+ 	if(setBitsOfByte(&buf[12],1,1,message->lockFlag)!=0)
+ 		return -1;	 	 		
+ 	if(setBitsOfByte(&buf[13],4,1,message->signalFault)!=0)
+ 		return -1;	 				
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToAxleCounterMsg
+ description            convert bytes buffer to axle counter message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_AxleCounterMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+//AxleCounterMsg���Ļ�����ת������
+int ats_co_BufferConvertToAxleCounterMsg(const BYTE buf[] ,ats_co_AxleCounterMsg  *message)
+{	
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);	 	
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);	 	 		 	
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);	 	 		 	
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);	 	 		 	
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);	 	 			
+ 	message->axleCounterId=bytes2int(&buf[7],SHT2BYTE);	 		 			 	
+ 	message->axleCounterFault=countValueofBits(buf[20],0,2);	
+ 	message->freeStatus=countValueofBits(buf[11],0,2);		 		 	 	
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_AxleCounterMsgConvertToBuffer
+ description            convert axle counter message to bytes buffer
+ parameter
+ 	 ats_co_AxleCounterMsg *		IN	 		message
+ 	 BYTE	[]						OUT			buf
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_AxleCounterMsgConvertToBuffer(ats_co_AxleCounterMsg *message,BYTE buf[])
+{	
+	if(int2bytes(&buf[0],CHAR2BYTE,message->PDI)!=0)
+ 		return -1;	 			
+	if(int2bytes(&buf[1],SHT2BYTE,message->msgType)!=0)
+ 		return -1;	 			 		 	
+ 	if(int2bytes(&buf[3],CHAR2BYTE,message->length)!=0)
+ 		return -1;	 			 	 		 	
+ 	if(int2bytes(&buf[4],SHT2BYTE,message->counter)!=0) 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[6],CHAR2BYTE,message->elementType)!=0)	 		
+ 		return -1;	 		
+ 	if(int2bytes(&buf[7],SHT2BYTE,message->axleCounterId)!=0)	 		
+ 		return -1;	 			 		 			 			 		
+ 	if(setBitsOfByte(&buf[20],0,2,message->axleCounterFault)!=0)
+ 		return -1;	 	 		
+	if(setBitsOfByte(&buf[11],0,2,message->freeStatus)!=0)
+ 		return -1;	 	 				
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToCrossingMsg
+ description            convert bytes buffer to crossing message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_CrossingMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToCrossingMsg(const BYTE buf[] ,ats_co_CrossingMsg  *message)
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+ 	message->pointIndex=bytes2int(&buf[7],SHT2BYTE);
+ 	message->operatingMode=countValueofBits(buf[9],0,3);
+ 	message->fault=countValueofBits(buf[9],4,1);
+ 	message->CommF=countValueofBits(buf[9],5,1);
+ 	message->SDA=countValueofBits(buf[9],7,1);
+ 	message->ATPflag=countValueofBits(buf[10],0,1);
+ 	message->failureInformation=countValueofBits(buf[10],1,6);
+ 	message->interLocking=countValueofBits(buf[10],7,1);
+ 	message->protectPos=countValueofBits(buf[11],0,2);
+ 	message->routePos=countValueofBits(buf[11],2,2);
+ 	message->logic=countValueofBits(buf[11],5,1);
+ 	message->lockFlag=countValueofBits(buf[11],6,1);
+ 	message->timeDelay=countValueofBits(buf[12],0,1);
+ 	message->crossingLockflag=countValueofBits(buf[12],3,1);
+ 	message->crossingPos=countValueofBits(buf[12],5,1);
+ 	message->crossingReset=countValueofBits(buf[13],5,1);
+ 	message->crossingDirection=countValueofBits(buf[14],2,1);
+ 	message->routeProtectDirection=countValueofBits(buf[14],3,1);
+ 	message->areaLimitSet=countValueofBits(buf[14],4,1);
+ 	message->temporaryLimitSpeedSet=countValueofBits(buf[20],0,2);
+ 	message->temporaryLimitSpeedValue=(u_int32)bytes2int(&buf[21],CHAR2BYTE);
+ 	message->impropriateStatus=countValueofBits(buf[22],3,3);
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToAreaStatusMsg
+ description            convert bytes buffer to area status message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_AreaStatusMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToAreaStatusMsg(const BYTE buf[] ,ats_co_AreaStatusMsg  *message)
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+ 	message->areaStatusIndex=bytes2int(&buf[7],SHT2BYTE);
+ 	message->operatingMode=countValueofBits(buf[9],0,3);
+ 	message->fault=countValueofBits(buf[9],4,1);
+ 	message->CommF=countValueofBits(buf[9],5,1);
+ 	message->SDA=countValueofBits(buf[9],7,1);
+ 	message->ATPflag=countValueofBits(buf[10],0,1);
+ 	message->failureInformation=countValueofBits(buf[10],1,6);
+ 	message->interLocking=countValueofBits(buf[10],7,1);
+ 	message->areaBlockFlag=countValueofBits(buf[11],0,1);
+ 	message->reduceNoiseFlag=countValueofBits(buf[11],1,1);
+ 	message->allowNearFlag=countValueofBits(buf[11],2,1);
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToTrainPositionReport
+ description            convert train position report to bytes buffer
+ parameter
+ 	 ats_co_TrainPositionReport *		IN	 		message
+ 	 BYTE	[]						OUT			buf
+ 	 Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToTrainPositionReport(const BYTE buf[] ,ats_co_TrainPositionReport  *message)
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+ 	message->workAreaIndex=bytes2int(&buf[7],SHT2BYTE);
+ 	message->operatingMode=countValueofBits(buf[9],0,3);
+ 	message->fault=countValueofBits(buf[9],4,1);
+ 	message->CommF=countValueofBits(buf[9],5,1);
+ 	message->SDA=countValueofBits(buf[9],7,1);
+ 	message->ATPflag=countValueofBits(buf[10],0,1);
+ 	message->failureInformation=countValueofBits(buf[10],1,6);
+ 	message->interLocking=countValueofBits(buf[10],7,1);
+ 	message->locSecurityFlag=countValueofBits(buf[11],0,1);
+ 	message->trainPositionFlag=countValueofBits(buf[11],4,1);
+ 	message->locIntegrityIsOK=(u_int32)bytes2int(&buf[14],CHAR2BYTE);
+ 	message->headSegmentID=bytes2int(&buf[15],SHT2BYTE);
+ 	message->headOffset=bytes2int(&buf[17],INT2BYTE);
+ 	message->trainDirection=countValueofBits(buf[21],0,2);
+ 	message->tailSegmentID=bytes2int(&buf[22],SHT2BYTE);
+ 	message->tailOffset=bytes2int(&buf[24],INT2BYTE);
+ 	message->operationCtrLevel=countValueofBits(buf[29],0,2);
+ 	message->trainDriveMode=countValueofBits(buf[30],0,3);
+ 	message->trainSpeed=bytes2int(&buf[34],SHT2BYTE);
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToRouteStatusMsg
+ description            convert bytes buffer to route status message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_RouteStatusMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToRouteStatusMsg(const BYTE buf[] ,ats_co_RouteStatusMsg  *message)
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+ 	message->routeIndex=bytes2int(&buf[7],SHT2BYTE);
+ 	message->operatingMode=countValueofBits(buf[9],0,3);
+ 	message->fault=countValueofBits(buf[9],4,1);
+ 	message->CommF=countValueofBits(buf[9],5,1);
+ 	message->SDA=countValueofBits(buf[9],7,1);
+ 	message->ATPflag=countValueofBits(buf[10],0,1);
+ 	message->failureInformation=countValueofBits(buf[10],1,6);
+ 	message->interLocking=countValueofBits(buf[10],7,1);
+ 	message->routeCtrLevel=countValueofBits(buf[11],0,2);
+ 	message->ATPCtrLevel=countValueofBits(buf[11],4,1);
+	return 0;
+}
+
+
+///*******************************************************************
+// Function name			ats_co_BufferConvertToWCUErrMsg
+// description            convert bytes buffer to WCU error message
+// parameter
+// 	 BYTE	[]						IN				buf
+// 	 ats_co_WCUErrMsg *		OUT 			message
+// Return value
+// 	 true or false
+// *******************************************************************/
+//int ats_co_BufferConvertToTrainErrMsg(const BYTE buf[] ,ats_co_TrainErrMsg  *message)
+//{
+//	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+// 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+// 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+// 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+// 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+// 	message->trainIndex=bytes2int(&buf[7],SHT2BYTE);
+// 	message->minute=(u_int32)bytes2int(&buf[9],CHAR2BYTE);
+// 	message->hour=(u_int32)bytes2int(&buf[10],CHAR2BYTE);
+// 	message->day=(u_int32)bytes2int(&buf[11],CHAR2BYTE);
+// 	message->month=(u_int32)bytes2int(&buf[12],CHAR2BYTE);
+// 	message->year=(u_int32)bytes2int(&buf[13],CHAR2BYTE);
+// 	message->errCode=(u_int32)bytes2int(&buf[14],SHT2BYTE);
+// 	message->moduleCode=(u_int32)bytes2int(&buf[16],SHT2BYTE);
+//	return 0;
+//}
+
+/*******************************************************************
+ Function name			ats_co_BufferConvertToErrIndicationMsg
+ description            convert bytes buffer to error indication message
+ parameter
+ 	 BYTE	[]						IN				buf
+ 	 ats_co_WCUErrMsg *		OUT 			message
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_BufferConvertToErrIndicationMsg(const BYTE buf[] ,ats_co_ErrIndicationMsg  *message)
+{
+	message->PDI=(u_int32)bytes2int(&buf[0],CHAR2BYTE);
+ 	message->msgType=(u_int32)bytes2int(&buf[1],SHT2BYTE);
+ 	message->length=(u_int32)bytes2int(&buf[3],CHAR2BYTE);
+ 	message->counter=bytes2int(&buf[4],SHT2BYTE);
+ 	message->elementType=(u_int32)bytes2int(&buf[6],CHAR2BYTE);
+ 	message->index=bytes2int(&buf[7],SHT2BYTE);
+ 	message->minute=(u_int32)bytes2int(&buf[9],CHAR2BYTE);
+ 	message->hour=(u_int32)bytes2int(&buf[10],CHAR2BYTE);
+ 	message->day=(u_int32)bytes2int(&buf[11],CHAR2BYTE);
+ 	message->month=(u_int32)bytes2int(&buf[12],CHAR2BYTE);
+ 	message->year=(u_int32)bytes2int(&buf[13],CHAR2BYTE);
+ 	message->errCode=(u_int32)bytes2int(&buf[14],SHT2BYTE);
+ 	message->moduleCode=(u_int32)bytes2int(&buf[16],SHT2BYTE);
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_SendBuffer
+ description
+ parameter
+ 	 int				IN			channel
+ 	 const BYTE	[]		IN			buf
+ 	 size_t 			IN	 		len
+ Return value
+ 	 true or false
+ *******************************************************************/
+//�շ����ĺ���
+int ats_co_SendBuffer(int channel,const BYTE buf[],size_t len)
+{		
+	return 0;
+}
+
+/*******************************************************************
+ Function name			ats_co_ReceiveBuffer
+ description
+ parameter
+ 	 int				IN			channel
+ 	 const BYTE	[]		OUT			buf
+ 	 size_t 			OUT	 		len
+ Return value
+ 	 true or false
+ *******************************************************************/
+int ats_co_ReceiveBuffer(int channel,const BYTE buf[], size_t len)
+{	
+	return 0;
+}

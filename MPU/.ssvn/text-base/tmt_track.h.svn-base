@@ -1,0 +1,42 @@
+/***************************************************************//**
+   @file                           tmt_track.h.
+   @author                         zhangxy
+   @date                           2011-04-22
+   @brief                          client of ats
+   @version                        1.0
+   @historyhead{author,         data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-05-05,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#ifndef __TMT_TRACK_H__
+#define __TMT_TRACK_H__
+
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <limits.h>
+#include "tmt_com.h"
+
+int tmt_tk_ConvertionTrackProcess(const int trackid, const int freeStatus);
+int ats_tmt_StationTrackProcess(const int trackid);
+int tmt_tk_DepartureTrackProcess(const int trackid,const int direction);
+int ats_tmt_PrestationTrackProcess(const int trackid);
+int tmt_tk_TriggerTrackProcess(const int trackid, int dwellTime);
+int tmt_tk_TrackOccpyProcess(const int trackid, int * physicalFree);
+int ats_ars_add_requirement(trainids, EquipmentType, trackid, trggerTime, stationDwellTime);
+
+
+
+#endif
+
+
+

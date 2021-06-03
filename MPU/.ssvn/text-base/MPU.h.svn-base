@@ -1,0 +1,345 @@
+/*
+ * mpu.c
+ *  Created on: 2011-12-20
+ *      Author: w.j
+ */
+
+#ifndef _MPU_H_
+#define _MPU_H_
+
+#include "ats_co_message.h"
+#include "ats_co_convert.h"
+#include"MPUCommon.h"
+#include <pthread.h>
+
+
+#ifdef  __cplusplus
+	extern "C" {
+#endif
+
+typedef struct _MPUTheadSyncMutex
+{
+			pthread_mutex_t  *thread_mutex;
+     pthread_cond_t 		*thread_cond;
+} MPUTheadSyncMutex;
+
+//����������
+int	MPUThreadSyncMutex_create(MPUTheadSyncMutex  *mutex);
+//��
+int	MPUThreadSyncMutex_lock(MPUTheadSyncMutex  *mutex);
+//����
+int	MPUThreadSyncMutex_unlock(MPUTheadSyncMutex  *mutex);
+//����
+int	MPUThreadSyncMutex_trylock(MPUTheadSyncMutex  *mutex);
+//�ͷ���
+int	MPUThreadSyncMutex_destroy(MPUTheadSyncMutex  *mutex);
+
+typedef struct _MPUReceiverPoolNode
+{
+		ATS_CO_MSG *psMessage;
+		struct _MPUReceiverPoolNode 	*rear;
+		struct _MPUReceiverPoolNode 	*next;
+} MPUReceiverPoolNode ;
+
+typedef struct _MPUReceiverPool
+{
+		MPUReceiverPoolNode *pHeadPointer;
+		MPUReceiverPoolNode *pProcessingPointer;
+		MPUReceiverPoolNode *pReceivingPointer;
+		int fixed_size;
+		int len;
+}MPUReceiverPool;
+
+//��ʼ�����ճ�
+int MPUReceiverPool_initialize(MPUReceiverPool *pool);
+//�ͷŽ��ճ�
+int MPUReceiverPool_free(MPUReceiverPool *pool);
+//�����Ϣ�����ճ�
+int MPUReceiverPool_message_add(ATS_CO_MSG *message, MPUReceiverPool *pool);
+//�ڽ��ճ��в�����Ϣ
+int MPUReceiverPool_message_search(ATS_CO_MSG *message, MPUReceiverPool *pool);
+//�ӽ��ճ�ɾ����Ϣ
+int MPUReceiverPool_message_delete(ATS_CO_MSG *message, MPUReceiverPool *pool);
+
+typedef struct _MPUSenderPoolNode
+{
+		ATS_CO_MSG *psMessageHandle;
+		struct _MPUSenderPoolNode  *rear;
+		struct _MPUSenderPoolNode *next;
+} MPUSenderPoolNode ;
+
+typedef struct _MPUSenderPool
+{
+		MPUSenderPoolNode *pHeadPointer;
+		MPUSenderPoolNode *pProcessingPointer;
+		MPUSenderPoolNode *pReceivingPointer;
+		int size;
+		int len;
+} MPUSenderPool;
+
+//��ʼ��
+int MPUSenderPool_initialize(MPUSenderPool  *pool);
+//�ͷ�
+int MPUSenderPool_free(MPUSenderPool  *pool);
+//�����Ϣ�����ͳ�
+int MPUSenderPool_add_message(ATS_CO_MSG *message, MPUSenderPool  *pool);
+//�ڷ��ͳز�����Ϣ
+int MPUSenderPool_search_message(ATS_CO_MSG *message, MPUSenderPool  *pool);
+//�ڷ��ͳ���ɾ����Ϣ
+int MPUSenderPool_delete_message(ATS_CO_MSG *message, MPUSenderPool  *pool);
+
+typedef struct _MPUMasterSlaveSyncInfo
+{
+		u_int32 		iMPUMasterSlaveID;//����ʹ�ñ�ʶ
+		u_int64	  lnMPUMasterSlaveSyncCounter;// //MPUͬ��������
+		NetTime		sMPUSyncTime;//MPUͬ��ʱ��
+		NetTime		sMPUInitialTime;//MPU��ʼ��ʱ��sInitialTime
+		NetTime		sMPURunningTime;//MPU����ʱ�䳤��
+		u_int64		lnMPUAnalyzingSN;//��ǰ�����������
+		u_int64		lnMPUReceivingSN;//��ǰ���ձ������
+		u_int16		bMPUAnalyzerSign;//�����������־
+		u_int16		bMPUReceiverSign;//�����������־
+} MPUMasterSlaveSyncInfo;
+
+int MPUMasterSlaveSyncInfo_init(MPUMasterSlaveSyncInfo *info);
+//��ȡͬ����Ϣ
+int MPUMasterSlaveSyncInfo_get(MPUMasterSlaveSyncInfo *info);
+//ˢ��ͬ����Ϣ
+int MPUMasterSlaveSyncInfo_refresh(MPUMasterSlaveSyncInfo *info);
+//���ͬ����Ϣ
+int MPUMasterSlaveSyncInfo_check(MPUMasterSlaveSyncInfo *info,u_int64 counter);
+int MPUMasterSlaveSyncInfo_free(MPUMasterSlaveSyncInfo *info);
+
+typedef struct _MPUThreadRegistrationInfo
+{
+		void *pvParameter;//call in
+		void *pvReturn;//call out
+		void *pvProcessFun;
+		pthread_t  sThreadHandle;
+		short				bIsActive;
+		NetTime	 sRegistrationTime;
+		NetTime	 sUpdateTime;
+		struct _MPUThreadRegistrationInfo *next;
+} MPUThreadRegistrationInfo;
+
+typedef struct _MPUThreadRegistrationInfoList
+{
+		MPUThreadRegistrationInfo  *header;
+		MPUThreadRegistrationInfo  *tailer;
+		MPUTheadSyncMutex  sThreadRegistrationInfoMutex;
+} MPUThreadRegistrationInfoList;
+
+//��ע���ע��
+int MPUThreadRegistrationInfoList_create(MPUThreadRegistrationInfoList *list);
+int MPUThreadRegistrationInfoList_destroy(MPUThreadRegistrationInfoList *list, MPUThreadRegistrationInfo *info);
+int MPUThreadRegistrationInfoList_register(MPUThreadRegistrationInfoList *list, MPUThreadRegistrationInfo *info);
+//ע��
+int MPUThreadRegistrationInfoList_unregister(MPUThreadRegistrationInfoList *list, MPUThreadRegistrationInfo *info);
+//ע�����
+int MPUThreadRegistrationInfoList_check_alive(MPUThreadRegistrationInfoList *list,MPUThreadRegistrationInfo *info);
+int MPUThreadRegistrationInfoList_update(MPUThreadRegistrationInfoList  *list, MPUThreadRegistrationInfo *info);
+//ע����Ϣ�޸�
+
+typedef struct _MPUThreadScheduler
+{
+		pthread_t	MPUThreadSchedulerThread;
+		MPUTheadSyncMutex   thread_mutex;
+} MPUThreadScheduler;
+
+//��ʼ��
+int MPUThreadScheduler_initialize(MPUThreadScheduler *thread_scheduler);
+//�ͷ�
+int MPUThreadScheduler_free(MPUThreadScheduler *thread_scheduler);
+//��ͣ
+int MPUThreadScheduler_pause(MPUThreadScheduler *thread_scheduler);
+//��λ
+int MPUThreadScheduler_resume(MPUThreadScheduler *thread_scheduler);
+
+typedef struct _MPUMasterSlaveSync    
+{
+		pthread_t	MPUMasterSlaveSync;
+		MPUTheadSyncMutex   thread_mutex;
+} MPUMasterSlaveSync;
+
+//��ʼ��ͬ����
+int MPUMasterSlaveSync_initialize(MPUMasterSlaveSync  *synchronizer);
+//�ͷ�ͬ����
+int MPUMasterSlaveSync_free(MPUMasterSlaveSync  *synchronizer);
+//��ͣ
+int MPUMasterSlaveSync_pause(MPUMasterSlaveSync  *synchronizer);
+//��λ
+int MPUMasterSlaveSync_resume(MPUMasterSlaveSync  *synchronizer);
+
+typedef struct _MPUSender
+{
+		int pipe ;
+		//pthread_t	MPUSenderThread;
+		//MPUTheadSyncMutex   thread_mutex;
+} MPUSender;
+
+//��������
+int MPUSender_initialize(MPUSender *sender,  int  pipe);
+//�ͷŷ���
+int MPUSender_free(MPUSender *sender);
+//��ͣ����
+int MPUSender_pause(MPUSender *sender );
+//���͸�λ
+int MPUSender_resume(MPUSender *sender);
+
+typedef struct _MPUReceiver
+{
+		int  pipe;
+		pthread_t	MPUReceiverThread;
+		MPUTheadSyncMutex   thread_mutex;
+}MPUReceiver;
+
+//����MPU�����߳�
+int MPUReceiver_initialize(MPUReceiver  *receiver);
+//�ͷ�MPU�����߳�
+int MPUReceiver_free(MPUReceiver  *receiver);
+//MPU��������ͣ
+int MPUReceiver_pause(MPUReceiver  *receiver);
+//MPU��������λ
+int MPUReceiver_resume(MPUReceiver  *receiver);
+
+typedef struct _MPUAnalyzer
+{
+		pthread_t	MPUAnalyzerThread;
+		MPUTheadSyncMutex   thread_mutex;
+} MPUAnalyzer;
+
+//���������߳�
+int MPUAnalyzer_initialize(MPUAnalyzer  *analyzer);
+//�ͷŷ����߳�
+int MPUAnalyzer_free(MPUAnalyzer  *analyzer);
+//�����߳���ͣ
+int MPUAnalyzer_pause(MPUAnalyzer  *analyzer);
+//�����̸߳�λ
+int MPUAnalyzer_resume(MPUAnalyzer  *analyzer);
+
+typedef struct _MPU_RM_LOAD_REQ
+{
+		short 	iDesModuleID;
+		short		iMessageID;
+		int  		iMPUMasterSlaveID;					//����ʹ�ñ�ʶ
+}MPU_RM_LOAD_REQ;
+
+typedef struct _MPU_RM_LOAD_RSP
+{
+		short 	iDesModuleID;
+		short		iMessageID;
+		int  		iMPUMasterSlaveID;					//����ʹ�ñ�ʶ
+}MPU_RM_LOAD_RSP;
+
+//4.2.2.3 MPU����ͬ�� MPU_RM_MASTER_SLAVE_SYNC
+typedef struct _MPU_RM_MASTER_SLAVE_SYNC
+{
+		short 		iDesModuleID;
+		short			iMessageID;
+		long long int  iMPUMasterSlaveSyncCounter;			//MPUͬ������
+		NetTime		sMPUSyncTime;						//MPUͬ��ʱ��
+		int				MPUAnalyzingSN;						//��ǰ�����������
+		int				iSourceIPAddr;
+		int				iDesIPAddr;
+		//int			iSourceModuleID;
+		//int			iDesModuleID;
+} MPU_RM_MASTER_SLAVE_SYNC;
+
+//4.2.2.3 MPU����ͬ�� MPU_RM_MASTER_SLAVE_SYNC_ACK
+typedef struct _MPU_RM_MASTER_SLAVE_SYNC_ACK
+{
+		short 		iDesModuleID;
+		short			iMessageID;
+		long long int  	iMPUMasterSlaveSyncCounter;			//MPUͬ������
+		NetTime		sMPUSyncTime;						//MPUͬ��ʱ��
+		int			iMPUAnalyzingSN;						//��ǰ�����������
+		int			iSourceIPAddr;
+		int			iDesIPAddr;
+} MPU_RM_MASTER_SLAVE_SYNC_ACK;
+
+//4.2.2.4 MPU�л���RM_MPU_CHANGING_LOCK
+typedef struct RM_MPU_CHANGING_LOCK
+{
+		short 	iDesModuleID;
+		short		iMessageID;
+		short		iLockReason;
+} RM_MPU_CHANGING_LOCK;
+
+//4.2.2.5 MPU�л���Ӧ��MPU_RM_CHANGING_LOCK_ACK
+typedef struct MPU_RM_CHANGING_LOCK_ACK
+{
+		short 	iDesModuleID;
+		short		iMessageID;
+		long long int  iMPUSyncCounter;						// MPUͬ��������
+		int			iMPUAnalyzingSN;						//��ǰ�����������
+		char		chrMemFileName[512];
+} MPU_RM_CHANGING_LOCK_ACK;
+
+//4.2.2.6 MPU�л�����RM_MPU_CHANGING_UNLOCK
+typedef struct _RM_MPU_CHANGING_UNLOCK
+{
+		short 	iDesModuleID;
+		short		iMessageID;
+		int			iMPUSyncCounter;
+} RM_MPU_CHANGING_UNLOCK;
+
+//4.2.2.7 MPU�л���ݴ���RM_MP_CHANGING_CONTEXT_TRANS
+typedef struct _RM_MPU_CHANGING_CONTEXT_TRANS
+{
+		short 					iDesModuleID;
+		short						iMessageID;
+		long long int  	iSequenceNumber;
+		char					chrFileName[512];
+} RM_MPU_CHANGING_CONTEXT_TRANS;
+
+//4.2.2.8 MPU�л���ݴ���ȷ��MPU_RM_CHANGING_CONTEXT_TRANS_ACK
+typedef struct _MPU_RM_CHANGING_CONTEXT_TRANS_ACK
+{
+		short 				iDesModuleID;
+		short					iMessageID;
+		long long int iSequenceNumber;
+		char					chrFileName[512];
+} MPU_RM_CHANGING_CONTEXT_TRANS_ACK;
+
+typedef struct _MPUCenter
+{
+		MPUThreadRegistrationInfoList  *psMPUThreadRegistrationInfoList ;
+		MPUMasterSlaveSyncInfo	 *psMasterSlaveSyncInfo;
+		MPUReceiverPool	  *psReceiverPool;
+		MPUSenderPool	 		*psSenderPool;
+		MPUTheadSyncMutex  *psReceiverPoolMutex;
+		MPUTheadSyncMutex  * psSenderPoolMutex;
+		MPUTheadSyncMutex  * psMasterSlaveSyncMutex;
+		MPUThreadScheduler   *psThreadScheduler;
+} MPUCenter;
+
+//MPUCenter��ʼ��
+int  MPUCenter_initialize(MPUCenter  *psMPUcenter);
+//�ͷ�MPUCenter
+int  MPUCenter_free(MPUCenter  *psMPUCenter);
+
+typedef struct _MPU
+{
+		//��Ԫ����
+		MPUCenter  psMPUCenter;
+		//����ͬ���߳�
+		MPUMasterSlaveSync  ppMPUMasterSlaveSync ;
+		//�����߳�
+		MPUSender	ppMPUSender;
+		//�����߳�
+		MPUReceiver ppMPUReceiver;
+		//�����߳�
+		MPUAnalyzer	ppMPUAnalyzer;
+} MPU;
+
+//��ʼ��MPU
+int MPU_initialize(MPU  *psMPU);
+//�ͷ�MPU
+int MPU_free(MPU  *psMPU);
+
+#ifdef  __cplusplus
+	 }
+#endif
+
+#endif
+

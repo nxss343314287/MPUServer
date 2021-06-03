@@ -1,0 +1,59 @@
+/***************************************************************//**
+   @file                           tmt_train_step.h
+   @author                         zhangxy
+   @date                           2011-04-22
+   @brief                          client of ats
+   @version                        1.0
+   @historyhead{author,            data(modify),       modify(list),        description}
+   @historybody{zhangxy,           2011-05-05,         Standardize,         FEP C code specification }
+   @historyfoot
+********************************************************************/
+
+#ifndef __TMT_TRAIN_STEP_H__
+#define __TMT_TRAIN_STEP_H__
+
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <limits.h>
+#include "tmt_com.h"
+
+#ifdef  __cplusplus
+	extern "C" {
+#endif
+
+int stepFlag;
+
+int tmt_tn_sp_CTCStepping(const int trackID,  int * logical_Free);
+int tmt_tn_sp_ITCStepping(const int trackID,  int * logical_Free);
+int tmt_tn_sp_FreeStatusStepping(const  int trackID,  int * logical_Free);
+int tmt_tn_sp_axleEdgeTrainIDSerach(const int trackID, const int axleID, const int previousTrackID, const int previousAxleID, const int isLast, const int previousIsLast, TrainIDs* axleTrainIDs);
+int tmt_tn_sp_axleEdgeStepping(const int trackID, const int axleID, const int previousTrackID, const int previousAxleID,  char * previousTrainID,  const int isLast);
+int tmt_tn_sp_axleRelateTrainIDSerach(const  int trackID, const  int axleID, const  int previousTrackID, const  int previousAxleID, const int isLast);
+TrainIDs *tmt_tn_sp_ItcTrainFilter(TrainIDs *serachedTrainIDs);
+int tmt_tn_sp_lineRelateTrainIDSerach (const  int trackID, const  int axleID, const int isLast, const  int serachTrainType);
+int tmt_tn_sp_FreeToITCStepping(const  int trackID, const  int axleID);
+int tmt_tn_sp_lastTrackOccupyProcess(const int trackID, const  int axleID, const int isLast);
+int tmt_tn_sp_CTCToITCStepping (const int trackID, const  int axleID);
+int tmt_tn_CircuitRouteStepping(const  int axleID);
+int tmt_tn_sp_CircuitBasicStepping(const  int axleID);
+int Tmt_tn_sp_SingleCircuitStepping(const  int originalAxleID, const  int axleID, const int direction);
+int tmt_tn_sp_CircuitFreeStepping(const  int axleID);
+int tmt_tn_log_StepHandle(int atpAvailable, int index, int atpVacancy, int logicalFree);
+int tmt_tn_circuit_StepHandle(int index, int freeStatus);
+
+#ifdef  __cplusplus
+	}
+#endif
+
+#endif
+
+

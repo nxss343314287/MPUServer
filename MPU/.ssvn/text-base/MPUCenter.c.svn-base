@@ -1,0 +1,114 @@
+/*
+ * MPUCenter.c
+ *
+ *  Created on: 2011-12-20
+ *      Author: w.j
+ */
+
+#include "MPU.h"
+
+
+int MPUMasterSlaveSyncInfo_init(MPUMasterSlaveSyncInfo *info)
+{
+		info=malloc(sizeof(MPUMasterSlaveSyncInfo));
+		memset(info,0,sizeof(MPUMasterSlaveSyncInfo));
+
+		info->sMPUInitialTime=get_time_msecond()*1000;
+		info->sMPURunningTime=get_time_msecond()*1000-info->sMPUInitialTime;
+		info->sMPUSyncTime=0;
+
+		info->bMPUAnalyzerSign=0;
+		info->bMPUReceiverSign=0;
+		info->iMPUMasterSlaveID=0;
+		info->lnMPUMasterSlaveSyncCounter=0;
+		info->lnMPUAnalyzingSN=0;
+
+		return true;
+}
+
+//��ȡͬ����Ϣ
+//get present sync info
+int MPUMasterSlaveSyncInfo_get(MPUMasterSlaveSyncInfo *info)
+{
+
+		return true;
+}
+
+//ˢ��ͬ����Ϣ
+int MPUMasterSlaveSyncInfo_refresh(MPUMasterSlaveSyncInfo *info)
+{
+
+		return true;
+}
+
+//���ͬ����Ϣ
+int MPUMasterSlaveSyncInfo_check(MPUMasterSlaveSyncInfo *info ,u_int64 counter)
+{
+
+		return true;
+
+}
+
+int MPUMasterSlaveSyncInfo_free(MPUMasterSlaveSyncInfo *info)
+{
+
+		free(info);
+		return true;
+}
+
+
+int  MPUCenter_initialize(MPUCenter  *psMPUCenter)
+{
+		//below is structure initial
+		//create registrationInfoList
+		MPUThreadRegistrationInfoList_create(psMPUCenter->psMPUThreadRegistrationInfoList);
+
+		//create master slave sync info
+		MPUMasterSlaveSyncInfo_init(psMPUCenter->psMasterSlaveSyncInfo);
+		//create master slave mutex
+		MPUThreadSyncMutex_create(psMPUCenter->psMasterSlaveSyncMutex);
+
+		//below is thread control
+		//create receiver pool
+		MPUReceiverPool_initialize(psMPUCenter->psReceiverPool);
+		//create receiver pool mutex
+		MPUThreadSyncMutex_create(psMPUCenter->psReceiverPoolMutex);
+
+		//create sender pool
+		//psMPUCenter->psSenderPool
+		//psMPUCenter->psSenderPoolMutex
+
+		//create thread scheduler
+		MPUThreadScheduler_initialize(	psMPUCenter->psThreadScheduler);
+
+		return true;
+}
+//�ͷ�MPUCenter
+
+
+int  MPUCenter_free(MPUCenter  *psMPUCenter)
+{
+
+			//free receiver pool
+			MPUReceiverPool_free(psMPUCenter->psReceiverPool);
+			//free receiver pool mutex
+			MPUThreadSyncMutex_destroy(psMPUCenter->psReceiverPoolMutex);
+
+			//free sender pool
+			//psMPUCenter->psSenderPool
+			//psMPUCenter->psSenderPoolMutex
+
+			//free master slave sync info
+			MPUMasterSlaveSyncInfo_free(psMPUCenter->psMasterSlaveSyncInfo);
+			//create master slave mutex
+			MPUThreadSyncMutex_destroy(psMPUCenter->psMasterSlaveSyncMutex);
+
+			//free thread scheduler
+			MPUThreadScheduler_free(psMPUCenter->psThreadScheduler);
+
+			//free registrationInfoList
+			MPUThreadRegistrationInfoList_free(psMPUCenter->psMPUThreadRegistrationInfoList);
+
+
+			return true;
+}

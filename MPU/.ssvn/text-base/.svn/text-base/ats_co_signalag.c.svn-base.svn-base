@@ -1,0 +1,51 @@
+/*******************************************************************
+	filename：							ats_co_signalag.c
+	author：								ss
+	create data：						2011-6-15
+	description：						Signal表操作方法实现
+	modify history：              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+
+int ats_co_SignalMsgSetDB(sqlite3 *db, ats_co_SignalMsg *message)
+{
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	//	(SwitchID,BlockAgainstThrowing,ClaimStatus,FreeStatus,InterlockingID,InterlockingName,SwitchName,
+  //		LeftToReverse,SwitchDirectionFlag,LockFlag,PositionFlag,SwitchFault)
+	
+	
+	sprintf(sqlstr, "update SIGNAL set SignalStatus = '%d',SignalAutoStatus = '%d',LockFlag = '%d',SignalFault = '%d' where SignalID = '%d'",
+					message->signalStatus,message->signalAutoStatus,message->lockFlag,message->signalFault,message->signalId);	 	 	
+					
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	printf("SQL: ret=%d, %s while running ats_co_SignalMsgSetDB\n", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		printf("SQLerror: %s while running ats_co_SignalMsgSetDB\n", errMsg);
+		return -1;
+	}				
+	return 0;
+}
+
+
+int ats_co_SignalMsgGetDB(sqlite3 *db, ats_co_SignalMsg *message)
+{
+	
+	return 0;
+}
+

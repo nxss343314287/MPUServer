@@ -1,0 +1,53 @@
+/*******************************************************************
+	filename：							ats_co_platformag.c
+	author：								ss
+	create data：						2011-6-22
+	description：						Platform表操作方法实现
+	modify history：              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+int ats_co_PlatformMsgSetDB(sqlite3 *db, ats_co_PlatformMsg *message)\
+{
+	
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	
+	
+	sprintf(sqlstr, "update platform set enforceState = '%d',autoState = '%d' where platformid = '%d'",
+				message->enforceState,message->autoState,message->platform);	 	 	
+					
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	printf("SQL: ret=%d, %s while running ats_co_log_PlatformMsgSetDB\n", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		printf("SQLerror: %s while running ats_co_log_PlatformMsgSetDB\n", errMsg);
+		return -1;
+	}
+	 
+	
+	
+	
+	return 0;
+}
+
+
+int ats_co_PlatformMsgGetDB(sqlite3 *db, ats_co_PlatformMsg *message)
+{
+	
+	return 0;
+}
+

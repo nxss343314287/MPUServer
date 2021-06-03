@@ -1,0 +1,42 @@
+/*
+ * MPUReceiverPool.c
+ *   Created on: 2011-12-20
+ *      Author: w.j
+ */
+
+#include "MPU.h"
+
+//��ʼ�����ճ�
+int MPUReceiverPool_initialize(MPUReceiverPool *pool)
+{
+
+		return true;
+}
+
+//�ͷŽ��ճ�
+int MPUReceiverPool_free(MPUReceiverPool *pool)
+{
+
+		return true;
+}
+
+//�����Ϣ�����ճ�
+int MPUReceiverPool_message_add(ATS_CO_MSG *message, MPUReceiverPool *pool)
+{
+
+		return  true;
+}
+
+//�ڽ��ճ��в�����Ϣ
+int MPUReceiverPool_message_search(ATS_CO_MSG *message, MPUReceiverPool *pool)
+{
+
+		return true;
+}
+
+//�ӽ��ճ�ɾ����Ϣ
+int MPUReceiverPool_message_delete(ATS_CO_MSG *message, MPUReceiverPool *pool)
+{
+
+		return true;
+}

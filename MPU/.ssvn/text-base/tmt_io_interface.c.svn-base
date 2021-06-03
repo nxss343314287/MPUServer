@@ -1,0 +1,393 @@
+#include "cas_tmt.h"
+
+
+
+
+int tmt_io_UpdateProcess(CoDataForTmt * dataStruct)
+{
+    CoDataForTmt *ptr_dataStruct=dataStruct;
+    while(ptr_dataStruct)
+    {
+        if(ptr_dataStruct->internal==1)
+        { 
+             if(ptr_dataStruct->telegramType==tmt_inr_AllData)
+             {
+            	 tmt_ManualAllTrainID(1, 1, 1, 1);
+             
+             }
+             else
+             {
+                 if(ptr_dataStruct->telegramType==tmt_inr_ModifiyNO)
+                 {
+                	 //tmt_ManualModifyTrainID(char *newTrainID, char *oldTrainID, short trackID);
+                 }
+             }
+             return 0;
+        
+        }
+        else
+        {
+            if(tmt_block_cbtc==1&&tmt_block_circuit==0)
+            {
+                   if(ptr_dataStruct->telegramType==tmt_ele_track || ptr_dataStruct->telegramType==tmt_ele_point ||ptr_dataStruct->telegramType==tmt_ele_crossing)
+                   {
+
+                	   tmt_tn_log_StepHandle(ptr_dataStruct->atpAvailable, ptr_dataStruct->index, ptr_dataStruct->atpVacancy, ptr_dataStruct->logicalFree);
+                	   tmt_tk_TrackOccpyProcess(ptr_dataStruct->trackid, ptr_dataStruct->freeStatus);
+
+                   }
+                   else
+                   {
+                        if(ptr_dataStruct->telegramType==tmt_ele_tn_status)
+                        {
+                        	tmt_tn_dh_TrainStatusProcess(ptr_dataStruct->trainID,ptr_dataStruct->carNumber,ptr_dataStruct->trainIndex,ptr_dataStruct->index,ptr_dataStruct->destination,ptr_dataStruct->service,ptr_dataStruct->serial,ptr_dataStruct->crew,ptr_dataStruct->line,ptr_dataStruct->driverMode);
+                        }
+                        else
+                        {
+                            if(ptr_dataStruct->telegramType==tmt_ele_tn_position)
+                            {
+                                 //tmt_tn_dh_TrainPositionProcess();
+                            }
+                        }
+                   
+                   }
+            
+            }
+            else
+            {
+                if(ptr_dataStruct->telegramType==tmt_ele_axle)
+                {
+
+                	 tmt_tn_circuit_StepHandle(ptr_dataStruct->index, ptr_dataStruct->freeStatus);
+                     tmt_axl_AxleOccpyProcess(ptr_dataStruct->index, ptr_dataStruct->freeStatus);
+                
+                }
+            
+            }
+        
+        }
+    
+        ptr_dataStruct++;
+    }
+
+    return 0;
+}
+
+
+
+int tmt_io_NewTrainID(int PTID, char * oldTrainID, char * trainID)
+{
+    int trackID;
+    char *newTrainID;
+    ats_co_pla_GetAssociatedTrackId (&trackID, db, PTID);
+    if(trackID==TMT_DEFAULT_DATA)
+    {
+        ELOG("no trackID");
+    
+    }
+    if(oldTrainID==0)
+    {
+    	TrainIDs *associatedTrainID;
+    	int num;
+        ats_co_trt_GetAssociatedTrainId (associatedTrainID, &num, db, trackID);
+        if(associatedTrainID==0)
+        {
+             if(strchr(newTrainID,'F'))
+             {
+            	 ats_co_tra_CreateBogusTrain (db, newTrainID, trackID);
+             }
+             else
+             {
+            	 int atpStatus;
+            	 ats_co_tra_CreateTrain (db, newTrainID, TMT_DEFAULT_DATA, TMT_DEFAULT_DATA);
+            	 ats_co_log_GetStatus (&atpStatus, db, trackID);
+                 ats_co_tra_SetTrainType (db, newTrainID, atpStatus);
+                 tmt_tn_dh_TrainIDRelated(newTrainID, trackID,0);
+             
+             }
+        }
+        else
+        {
+             int n=0;
+             while(associatedTrainID)
+             {
+                  if(associatedTrainID->trainId==newTrainID)
+                  {
+                	  tmt_io_TrainMCOut(associatedTrainID->trainId, trackID);
+                       n++;
+                  }
+                  associatedTrainID++;
+             }
+             if(n==0)
+             {
+                 ILOG("�������г����κ���ʱ�̱?һ��");
+                 int trainType;
+                 ats_co_tra_GetTrainType  (&trainType, db, newTrainID);
+                 if(trainType!=TMT_CTC_TRAIN)
+                 {
+                    tmt_tk_StationTrackProcess(trackID);
+                 }
+                 else
+                 {
+                	 tmt_io_TrainMCOut(newTrainID, trackID);
+                 }
+             }
+        
+        }
+    }
+    else
+    {
+         int oldTrackID;
+         int occupytrackid;
+         ats_co_tra_GetOccupyTrackId (&occupytrackid, db, trainID);
+         ats_co_tra_ChangeTrainId (db, oldTrainID, newTrainID);
+         tmt_io_TrainIDShow (oldTrackID, oldTrainID, 0);
+         tmt_io_TrainIDShow (trackID, newTrainID, 0);
+         tmt_io_TrainMCOut(newTrainID, trackID);
+    }
+
+
+    return 0;
+}
+
+int tmt_io_TrainIDShow (const int trackID, char * trainID, int showOrNo)
+{
+	int destination=0;
+	int service=0;
+	int serial=0;
+	int crewNumber=0;
+	int car1=0;
+	int car2=0;
+	int driverMode=TMT_DRIVE_RM;
+	int trainIDType;
+	int carspeed;
+	if(strchr(trainID,'F'))
+	{
+       if(showOrNo==0)
+       {
+    	   trainIDType=TMT_TRAINID_CLOSEF;
+
+       }
+       else
+       {
+    	   trainIDType=TMT_TRAINID_FAULT;
+
+       }
+
+	}
+	else
+	{
+		if(showOrNo==0)
+		{
+			trainIDType=TMT_TRAINID_NULL;
+		}
+		else
+		{
+			trainIDType=TMT_TRAINID_NORMAL;
+		}
+		int deviation_time=1;
+		ats_co_tra_GetDeviationTime (&deviation_time, db, trainID);
+		int index=-1;
+		ats_co_tra_GetIndex (&index, db, trainID);
+		int trainType=1;
+		ats_co_tra_GetTrainType  (&trainType, db, trainID);
+		int carNO;
+		ats_co_tra_GetCarNumber (&carNO, db, trainID);
+		printf("deviation_time=%d,index=%d,trainType=%d,carNO=%d\n",deviation_time,index,trainType,carNO);
+		if(carNO>0)
+		{
+			car1=carNO/1000;
+			car2=carNO%1000;
+		}
+		if(strlen(trainID)== tmt_trainID_Length)
+		{
+			char *tmp_p=trainID;
+			char *str_destination=malloc(4);
+			strncpy(str_destination,tmp_p+0,3);
+			destination=atol(str_destination);
+			char *str_service=malloc(3);
+			tmp_p=trainID+3;
+			strncpy(str_service,tmp_p,2);
+			service=atol(str_service);
+			char *str_serial=malloc(3);
+			tmp_p=trainID+6;
+			strncpy(str_serial,tmp_p,2);
+			serial=atol(str_serial);
+			printf("destination=%d service=%d serial=%d\n",destination,service,serial);
+			free(str_destination);
+			free(str_service);
+			free(str_serial);
+            if(index==TMT_DEFAULT_DATA)
+            {
+            	index=0;
+            }
+            else
+            {
+            	TrainPostion trainpostioninfo;
+            	ats_co_tmtsyn_GetTrainPostionData (db, &trainpostioninfo, index);
+            	driverMode=trainpostioninfo.driverMode;
+            	crewNumber=trainpostioninfo.crewNo;
+            	carspeed=trainpostioninfo.speed;
+            	//内部报文 machineNO_hmi:hmi组播 componentNO_cmp：hmi处理程序编号
+            	adapter_tmt_send_trainID(machineNO_hmi,componentNO_cmp, destination, service, serial,
+            			crewNumber, LINE, car1, car2, trackID, deviation_time, trainIDType,
+            			TMT_TRAINID_FAULT, driverMode, carspeed);
+            }
+
+		}
+
+	}
+    return 0;
+}
+
+int tmt_io_TrainTime(const int ptid, char * trainID, int dwellTime, int deviationTime)
+{
+	int associatedTrackID;
+	ats_co_pla_GetAssociatedTrackId (&associatedTrackID, db, ptid);
+	if(associatedTrackID==TMT_DEFAULT_DATA)
+	{
+       return 0;
+	}
+	 ats_co_tra_SetDeviationTime (db, trainID, deviationTime);
+	int occupyTrackID;
+	 ats_co_tra_GetOccupyTrackId (&occupyTrackID, db, trainID);
+	 tmt_io_TrainIDShow (occupyTrackID, trainID, 0);
+	 tmt_io_TrainIDShow (associatedTrackID, trainID, 0);
+	if(dwellTime==TMT_DEFAULT_DATA)
+	{
+		return 0;
+	}
+	int trackType;
+	ats_co_log_GetTrackType (&trackType, db, associatedTrackID);
+	if(trackType==(TMT_TURNBACK_TRACK||TMT_STATION_TURNBACKTRACK||TMT_STATION_TRIGGER_TRACK||TMT_CONVERTION_TRACK))
+	{
+		tmt_tk_TriggerTrackProcess(associatedTrackID, dwellTime);
+
+	}
+	return 0;
+}
+
+/*test data:
+ *
+ * trainID:1100202trackID:G0202A */
+int tmt_io_TrainMCOut(char * trainID, const int trackID)
+{
+
+	unsigned char consoleNO=1;
+	char interlockingZone=1;
+	char *p=trainID;
+	int have=0;
+	while(p&&(have==0))
+	{
+		if(*p>='0'&&*p<='9')
+		{
+			have=1;
+			break;
+		}
+	    p++;
+	}
+	if(have==0)
+	{
+        ILOG("车次号trainID不包含数字\n");
+        return 0;
+
+	}
+
+
+	int carNO=0;
+	int carNOA=0;
+	int index=0;
+	int indexA=0;
+	int crewNO=0;
+	int crewNOA=0;
+	int destination=0;
+	int service=0;
+	int serial=0;
+	ats_co_tra_GetCarNumber (&carNOA, db, trainID);
+	if(carNOA>0)
+	{
+		carNO=carNOA;
+	}
+	ats_co_tra_GetIndex (&indexA, db, trainID);
+	if(indexA>0)
+	{
+		index=indexA;
+	}
+	ats_co_tra_GetCrewNumber (&crewNOA, db, trainID);
+	if(crewNOA>0)
+	{
+		crewNO=crewNOA;
+	}
+	//截取trainID的0至7位
+	char *tmp_p=trainID;
+	char *str_destination=malloc(4);
+	strncpy(str_destination,tmp_p+0,3);
+	destination=atol(str_destination);
+
+	char *str_service=malloc(3);
+	tmp_p=trainID+3;
+	strncpy(str_service,tmp_p,2);
+	service=atol(str_service);
+
+	char *str_serial=malloc(3);
+	tmp_p=trainID+6;
+	strncpy(str_serial,tmp_p,2);
+	serial=atol(str_serial);
+	printf("destination=%d service=%d serial=%d\n",destination,service,serial);
+	free(str_destination);
+	free(str_service);
+	free(str_serial);
+	if(disposalID>=1 && disposalID<TMT_MAX_TRANSATION)
+	{
+		disposalID++;
+
+	}
+	else
+	{
+		disposalID=1;
+	}
+	//外部接口：machineNO_fep为fep地址编号；componentNO_tts轨旁数据库地址编号
+
+	adapter_tmt_send_TrainIdentifyNO(machineNO_fep, componentNO_tts, consoleNO,interlockingZone,disposalID,index,destination,service,serial,crewNO,LINE,carNO);
+	return 0;
+}
+
+
+int tmt_io_ReturnCodeOut(int result)
+{
+
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,41 @@
+/*
+ * 	MPUSender.c
+ *  Created on: 2011-12-22
+ *  Author: w.j
+ */
+#include "MPU.h"
+
+
+//��������
+int MPUSender_initialize(MPUSender *sender,  int  pipe)
+{
+
+		return true;
+}
+
+//�ͷŷ���
+int MPUSender_free(MPUSender *sender)
+{
+
+		return true;
+}
+
+//��ͣ����
+int MPUSender_pause(MPUSender *sender )
+{
+
+		return true;
+}
+
+//���͸�λ
+int MPUSender_resume(MPUSender *sender)
+{
+
+
+		return true;
+}
+
+
+
+
+

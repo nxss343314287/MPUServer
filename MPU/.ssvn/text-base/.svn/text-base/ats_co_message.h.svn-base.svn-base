@@ -1,0 +1,548 @@
+/*******************************************************************
+	filename��											ats_co_messager.h
+	author��												w.j.
+	create data��									05-Aug-2011
+	description��									CO��IOͨ�ű��Ĵ���ͷ�ļ�
+	warning��
+	modify history��              
+	author			data(modify)			modify(list)			description
+  			
+********************************************************************/
+
+#ifndef _ATS_CO_MSG_H_
+#define _ATS_CO_MSG_H_
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <math.h>
+#include <sqlite3.h>
+#include "ats_co_convert.h"
+#include "../CO/ats_co_sql.h"
+#include "../public.h"
+//#include "TMT/common.h"
+/*
+typedef struct
+{
+    int day;
+    int month;
+    int year;
+    int second;
+    int minute;
+    int hour;
+}Datetime;
+*/
+
+
+//*�������
+enum ErrCode {
+	
+	//section -1000 to 0 ,stand for system call error
+	Error=	-1,				//default	
+	//section 0 to 1000 ,stand for database operation error	
+	//section 1000 to 2000 ,stand for network communication error
+	//section up 5000 ,stand for error happened at user business logical layer
+	ERROR_MESSAGE_TYPE=5000,
+};
+
+//* ȫ�ֶ���
+#define PACKET_LEN					128
+#define MSG_FIELD_LEN	  		32
+#define MSG_HEADER_LEN      24
+#define MAX_NAME_LEN				255
+#define MAX_MSG_NUM 100
+
+//* sqlite3 definition
+#define MAX_SQL_STR_LEN 		1024
+#define DB_NAME 						"ATRSQL.db"
+
+
+
+
+//��������
+enum MsgType
+{
+	STATUS_TYPE = 	400,
+	EVENT_TYPE  = 	434,
+	COMMAND_TYPE=   500
+};
+
+enum ElementType
+{
+	LOGICALTRACK=207,
+	TRAIN=151	,
+	PLATFORM=26,
+	SWITCHS=200,
+	SIGNAL=201,
+	AXLECOUNTER=213
+};
+
+//typedef  unsigned char u8;
+//typedef  short u16;
+//typedef  int  u32;
+//typedef  long long  u64;
+//typedef  unsigned long long NetTime;
+ 
+//typedef struct _message_header
+//{
+//    NetTime timestamp;         /** the time stamp of sending the message */
+//    u32    seqno;              /** sequence no */
+//    u8     srcno;              /** source IP no */
+//    u8     destno;             /** destination IP no */
+//    u8     srcmodule;          /** source module no */
+//    u8     destmodule;         /** destination module no */
+//    u16    datatype;           /** type of the data */
+//    u8     protocoltype;       /** type of the protocol */
+//    u8     mainorbak;          /** server flag */
+//    u16    remain;
+//    u16    datalen;            /** length of the data */
+//}message_header_t;
+	
+//�������ʽ; <���˵��><ֵ=value><����=type><�ֽں�=position><λ��=bits>		
+typedef struct _ats_co_MsgHead
+{
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+	 	int msgType;//<��������><value=><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=><type=int><bytes=6><bits=>
+}ats_co_MsgHead;
+
+//�������
+typedef struct _ats_co_TrackMsg
+{							 		 			 	
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+		int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=207><type=int><bytes=6><bits=>
+	 	int trackid;//<�������><value=><type=int><bytes=7-8><bits=>
+	 	int direction;//<�����·����><value=0û�з���1�����С����� 2�����С�����><type=int><bytes=12><bits=6-7>
+	 	int lockFlag;//<��������־><value=0������ 1����><type=int><bytes=11><bits=3>
+	 	int freeStatus;//<�߼��������״̬><value=0ռ�� 1����><type=int><bytes=11><bits=2>
+	 	int status;//<���ATPVacancy״̬><value=0δ���� 1���� 2ATP�г�ռ�� 3��ATP�г�ռ�� 4����><type=int><bytes=22><bits=3-4-5>
+}ats_co_TrackMsg;
+
+//�г�״̬����
+typedef struct _ats_co_TrainStatusMsg
+{		
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+		int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=151><type=int><bytes=6><bits=>
+		int trainindex;//<�г������><value=><type=int><bytes=7-8><bits=>
+	 	int service;//<�����><value=><type=int><bytes=38-39><bits=>
+	 	int serial;//<�г̺�><value=><type=int><bytes=40><bits=>
+	 	int line;//<��·��><value=><type=int><bytes=43><bits=>
+	 	int driver;//<˾���><value=><type=int><bytes=41-42><bits=>
+	 	int car1;//<���׺�1><value=><type=int><bytes=44><bits=>
+	 	int car2;//<���׺�2><value=><type=int><bytes=45><bits=>
+	 	int ebIsApplied;//<�����ƶ�><value=><type=int><bytes=13><bits=0>
+	 	int ebReason;//<�����ƶ�ԭ��><value=><type=int><bytes=14><bits=0-1-2>
+	 	int trainDoorStatus;//<����״̬><value=><type=int><bytes=12><bits=0-1>
+	 	int controlLevel;//<�г����Ƶȼ�><value=><type=int><bytes=15><bits=0-1>
+	 	int obcuFailure;//<OBCU����><value=><type=int><bytes=22><bits=1>
+}ats_co_TrainStatusMsg;
+
+//�г��¼�����
+typedef struct _ats_co_TrainEventMsg
+{		
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+		int msgType;//<��������><value=434><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=151><type=int><bytes=6><bits=>
+		int index;//<�г�����><value=><type=int><bytes=7-8><bits=>
+		Datetime eventTime;//<����ʱ��><value=><type=tm><bytes=9-13><bits=>
+	 	int trainToPtEvent;//<�¼�����><value=151><type=int><bytes=14-15><bits=>
+	 	int eventCause;//<ԭ���><value=><type=int><bytes=16-17><bits=>
+		int PTID;//
+}ats_co_TrainEventMsg;
+
+
+//վ̨��ݱ���
+typedef struct _ats_co_PlatformMsg
+{	
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+		int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=26><type=int><bytes=6><bits=>
+		int platform;//<վ̨��><value=><type=int><bytes=7-8><bits=>
+	 	int enforceState;//<ǿ��Խվ��۳�״̬><value=><type=int><bytes=20><bits=4-5>
+	 	int autoState;//<�Զ�Խվ״̬><value=><type=int><bytes=21><bits=7>
+}ats_co_PlatformMsg;
+
+
+//������ݱ���
+typedef struct _ats_co_SwitchMsg
+{	
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+		int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=200><type=int><bytes=6><bits=>
+		int switchId;//<��������><value=><type=int><bytes=7-8><bits=>
+	  int positionFlag;//<����λ��><value=0�Ŀ� 1��λ 2��λ 3����><bytes=11><bits=0><bytes=12><bits=1> <bytes=11><bits=6>
+		int claimStatus;//<��������״̬><value=0δ���� 1��·���� 2�����������><type=int><bytes=11><bits=3-4>
+	  int blockAgainstThrowing;//<���?��״̬><value=0������ 1��><type=int><bytes=12><bits=2>
+	  int lockFlag;//<��������־><value=0������ 1����><type=int><bytes=12><bits=4>
+	  int freeStatus;//<������б�־><value=0ռ�� 1����><type=int><bytes=11><bits=7>
+	  //below is for counting positionFlag
+	  int pointTrailed;//<����״̬><value=0û�м��� 1����><type=int><bytes=11><bits=0>;
+    int supervision;//<����־><value=0ռ�� 1����><type=int><bytes=12><bits=1>;
+    int position;//<����λ��><value=0�� 1��><type=int><bytes=11><bits=6>;
+}ats_co_SwitchMsg;
+
+
+//�źŻ���ݱ���
+typedef struct _ats_co_SignalMsg
+{	
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+	 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=201><type=int><bytes=6><bits=>
+	 	int signalId;//<�źŻ���><value=><type=int><bytes=7-8><bits=>
+		int signalStatus;//<�źŻ���ʾ״̬><value=><type=int><bytes=11><bits=4-5-6>
+		int signalAutoStatus;//<�źŻ�����״̬><value=0�� 1ARS 2ARC 3����FLT><type=int><bytes=12><bits=2-3>
+		int lockFlag;//<�źŻ�����־><value=0=������ 1=����><type=int><bytes=12><bits=1>
+		int signalFault;//<�źŻ����״̬><value=0û�й��� 1�й���><type=int><bytes=13><bits=4>
+}ats_co_SignalMsg;
+
+
+//���ᱨ��
+typedef struct _ats_co_AxleCounterMsg
+{	
+		int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+	 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+	 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+	 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+	 	int elementType;//<Ԫ������><value=213><type=int><bytes=6><bits=>
+	 	int axleCounterId;//<������><value=><type=int><bytes=7-8><bits=>
+		int axleCounterFault;//<�������״̬><value=0 OK,1 ARB����ռ��, 2 NRB���ó���><type=int><bytes=20><bits=0-1>
+	  int freeStatus;//<�������״̬><value=0���� 1ռ�� 2����><type=int><bytes=11><bits=0-1>
+}ats_co_AxleCounterMsg;
+
+
+//���͸�TMT�ı仯�ṹ�����
+typedef struct _ats_co_DataForTMT
+{         
+  int elementType;//<Ԫ������><value=207/200>           
+  int elementid;//<Ԫ������><value=>   
+  int trackdirection;//<�����·����><value=0û�з���1�����С����� 2�����С�����>   
+  int tracklockFlag;//<��������־><value=0������ 1����>           
+  int trackfreeStatus;//<�߼��������״̬><value=0ռ�� 1����>   
+  int trackstatus;//<���ATPVacancy״̬><value=0δ���� 1���� 2ATP�г�ռ�� 3��ATP�г�ռ�� 4����>
+	int switchpositionFlag;//<����λ��><value=0�Ŀ� 1��λ 2��λ 3����>
+	int switchclaimStatus;//<��������״̬><value=0δ���� 1��·���� 2�����������>
+  int switchblockAgainstThrowing;//<���?��״̬><value=0������ 1��>
+  int switchlockFlag;//<��������־><value=0������ 1����>
+  int switchfreeStatus;//<������б�־><value=0ռ�� 1����>
+	int finish;
+}ats_co_DataForTMT;
+ 
+//to save configure information ,this is a brief structure  .
+//though name of function is not using here ,but we also save them.
+typedef struct _ConversationConfig
+{
+		int message_type;
+		int element_type;
+		int index;//here we use index to identify different of message type,so it can not be set the same
+		char *bufferConverToMsgFuncName;						
+		char *msgConverToBufferFuncName;
+		char *ats_co_setDBFuncName;
+		char *ats_co_getDBFuncName;	
+}sConversationConfig;
+
+typedef struct _ats_co_Crossing
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=203><type=int><bytes=6><bits=>
+ 	int pointIndex;//<value=><type=int><bytes=7-8><bits=>
+ 	int operatingMode;//<value=><type=int><bytes=9><bits=0-3>
+ 	int fault;//<value=><type=int><bytes=9><bits=4>
+ 	int CommF;//<value=><type=int><bytes=9><bits=5>
+ 	int SDA;//<value=><type=int><bytes=9><bits=7>
+ 	int ATPflag;//<value=><type=int><bytes=10><bits=0>
+ 	int failureInformation;//<value=><type=int><bytes=10><bits=1-6>
+ 	int interLocking;//<value=><type=int><bytes=10><bits=7>
+ 	int protectPos;//<value=><type=int><bytes=11><bits=0-1>
+ 	int routePos;//<value=><type=int><bytes=11><bits=2-3>
+ 	int logic;//<value=><type=int><bytes=11><bits=5>
+ 	int lockFlag;//<value=><type=int><bytes=11><bits=6>
+ 	int timeDelay;//<value=><type=int><bytes=12><bits=0>
+ 	int crossingLockflag;//<value=><type=int><bytes=12><bits=3>
+ 	int crossingPos;//<value=><type=int><bytes=12><bits=5>
+ 	int crossingReset;//<value=><type=int><bytes=13><bits=5>
+ 	int crossingDirection;//<value=><type=int><bytes=14><bits=2>
+ 	int routeProtectDirection;//<value=><type=int><bytes=14><bits=3>
+ 	int areaLimitSet;//<value=><type=int><bytes=14><bits=4>
+ 	int temporaryLimitSpeedSet;//<value=><type=int><bytes=20><bits=0-1>
+ 	int temporaryLimitSpeedValue;//<value=><type=int><bytes=21><bits=>
+ 	int impropriateStatus;//<value=><type=int><bytes=22><bits=3-5>
+}ats_co_CrossingMsg;
+
+
+typedef struct _ats_co_AreaStatusMsg
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+ 	int areaStatusIndex;//<value=><type=int><bytes=7-8><bits=>
+ 	int operatingMode;//<value=><type=int><bytes=9><bits=0-3>
+ 	int fault;//<value=><type=int><bytes=9><bits=4>
+ 	int CommF;//<value=><type=int><bytes=9><bits=5>
+ 	int SDA;//<value=><type=int><bytes=9><bits=7>
+ 	int ATPflag;//<value=><type=int><bytes=10><bits=0>
+ 	int failureInformation;//<value=><type=int><bytes=10><bits=1-6>
+ 	int interLocking;//<value=><type=int><bytes=10><bits=7>
+ 	int areaBlockFlag;//<value=><type=int><bytes=11><bits=0>
+ 	int reduceNoiseFlag;//<value=><type=int><bytes=11><bits=1>
+ 	int allowNearFlag;//<value=><type=int><bytes=11><bits=2>
+}ats_co_AreaStatusMsg;
+
+
+typedef struct _ats_co_TrainPositionReport
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+ 	int workAreaIndex;//<value=><type=int><bytes=7-8><bits=>
+ 	int operatingMode;//<value=><type=int><bytes=9><bits=0-3>
+ 	int fault;//<value=><type=int><bytes=9><bits=4>
+ 	int CommF;//<value=><type=int><bytes=9><bits=5>
+ 	int SDA;//<value=><type=int><bytes=9><bits=7>
+ 	int ATPflag;//<value=><type=int><bytes=10><bits=0>
+ 	int failureInformation;//<value=><type=int><bytes=10><bits=1-6>
+ 	int interLocking;//<value=><type=int><bytes=10><bits=7>
+ 	int locSecurityFlag;//<value=><type=int><bytes=11><bits=0>
+ 	int trainPositionFlag;//<value=><type=int><bytes=11><bits=4>
+ 	int locIntegrityIsOK;//<value=><type=int><bytes=14><bits=0>
+ 	int headSegmentID;//<value=><type=int><bytes=15-16><bits=>
+ 	int headOffset;//<value=><type=int><bytes=17-20><bits=>
+ 	int trainDirection;//<value=><type=int><bytes=21><bits=0-1>
+ 	int tailSegmentID;//<value=><type=int><bytes=22-23><bits=>
+ 	int tailOffset;//<value=><type=int><bytes=24-27><bits=>
+ 	int operationCtrLevel;//<value=><type=int><bytes=29><bits=0-1>
+ 	int trainDriveMode;//<value=><type=int><bytes=30><bits=0-2>
+ 	int trainSpeed;//<value=><type=int><bytes=34-35><bits=>
+}ats_co_TrainPositionReport;
+
+typedef struct _ats_co_RouteStatusMsg
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+ 	int routeIndex;//<value=><type=int><bytes=7-8><bits=>
+ 	int operatingMode;//<value=><type=int><bytes=9><bits=0-3>
+ 	int fault;//<value=><type=int><bytes=9><bits=4>
+ 	int CommF;//<value=><type=int><bytes=9><bits=5>
+ 	int SDA;//<value=><type=int><bytes=9><bits=7>
+ 	int ATPflag;//<value=><type=int><bytes=10><bits=0>
+ 	int failureInformation;//<value=><type=int><bytes=10><bits=1-6>
+ 	int interLocking;//<value=><type=int><bytes=10><bits=7>
+ 	int routeCtrLevel;//<value=><type=int><bytes=11><bits=0-1>
+ 	int ATPCtrLevel;//<value=><type=int><bytes=11><bits=4>
+}ats_co_RouteStatusMsg;
+
+//typedef struct _ats_co_WCUErrMsg
+//{
+//	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+// 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+// 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+// 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+// 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+// 	int WCUIndex;//<value=><type=int><bytes=7-8><bits=>
+// 	int minute;//<value=><type=int><bytes=9><bits=>
+// 	int hour;//<value=><type=int><bytes=10><bits=>
+// 	int day;//<value=><type=int><bytes=11><bits=>
+// 	int month;//<value=><type=int><bytes=12><bits=>
+// 	int year;//<value=><type=int><bytes=13><bits=>
+// 	int errCode;//<value=><type=int><bytes=14-15><bits=>
+// 	int moduleCode;//<value=><type=int><bytes=16-17><bits=>
+//}ats_co_WCUErrMsg;
+//
+//typedef struct _ats_co_AxleOrTrackCircuit
+//{
+//	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+// 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+// 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+// 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+// 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+// 	int trainIndex;//<value=><type=int><bytes=7-8><bits=>
+// 	int minute;//<value=><type=int><bytes=9><bits=>
+// 	int hour;//<value=><type=int><bytes=10><bits=>
+// 	int day;//<value=><type=int><bytes=11><bits=>
+// 	int month;//<value=><type=int><bytes=12><bits=>
+// 	int year;//<value=><type=int><bytes=13><bits=>
+// 	int errCode;//<value=><type=int><bytes=14-15><bits=>
+// 	int moduleCode;//<value=><type=int><bytes=16-17><bits=>
+//}ats_co_AxleOrTrackCircuit;
+
+typedef struct _ats_co_WCUErrMsg
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+ 	int index;//<value=><type=int><bytes=7-8><bits=>
+ 	int minute;//<value=><type=int><bytes=9><bits=>
+ 	int hour;//<value=><type=int><bytes=10><bits=>
+ 	int day;//<value=><type=int><bytes=11><bits=>
+ 	int month;//<value=><type=int><bytes=12><bits=>
+ 	int year;//<value=><type=int><bytes=13><bits=>
+ 	int errCode;//<value=><type=int><bytes=14-15><bits=>
+ 	int moduleCode;//<value=><type=int><bytes=16-17><bits=>
+}ats_co_ErrIndicationMsg;
+
+typedef struct _ats_co_TrainErrMsg
+{
+	int PDI;//<PDI����><value=1><type=default(int)><bytes=0><bits=default(all)>
+ 	int msgType;//<��������><value=400><type=default(int)><bytes=1-2><bits=default(all)>
+ 	int length ;//<���ĳ���><value=><type=int><bytes=3><bits=>
+ 	int counter;//<ָʾ������><value=><type=int><bytes=4-5><bits=>
+ 	int elementType;//<Ԫ������><value=158><type=int><bytes=6><bits=>
+ 	int trainIndex;//<value=><type=int><bytes=7-8><bits=>
+ 	int minute;//<value=><type=int><bytes=9><bits=>
+ 	int hour;//<value=><type=int><bytes=10><bits=>
+ 	int day;//<value=><type=int><bytes=11><bits=>
+ 	int month;//<value=><type=int><bytes=12><bits=>
+ 	int year;//<value=><type=int><bytes=13><bits=>
+ 	int errCode;//<value=><type=int><bytes=14-15><bits=>
+ 	int moduleCode;//<value=><type=int><bytes=16-17><bits=>
+}ats_co_TrainErrMsg;
+
+//Since we use below structure to receive bytes received from pipe,
+//we can get the size of received packet ,then analysis head of packet
+//format, get message type and size to initial a message handler
+typedef void (*ats_co_bufferConvertToMsgFunc)(const BYTE *buf,void *msg);
+typedef void (*ats_co_msgConvertToBufferFunc)(const void *msg,BYTE *buf);
+typedef void (*ats_co_msgLogicalFunc)(void *message);
+typedef void (*ats_co_setDBFunc)(sqlite3 *db,void *message);
+typedef void (*ats_co_getDBFunc)(sqlite3 *db,void *message);
+
+
+typedef struct _ATS_CO_MSG 
+{
+	 //format operation
+	 message_header_t  header;
+	 BYTE *format;
+	 size_t fixed_len;
+	 sConversationConfig  config;
+
+	 //structure of message conform to index value
+	 void *message;
+
+	 //functions for message conversation  
+   ats_co_bufferConvertToMsgFunc 	bufferConvertToMsgFunc;
+   ats_co_msgConvertToBufferFunc 	msgConvertToBufferFunc;   
+   	 
+   	   //逻辑处理函数
+   ats_co_msgLogicalFunc 	logicalMsgFunc;
+
+   //functions for database accessing 
+   ats_co_setDBFunc setDBFunc;
+   ats_co_getDBFunc getDBFunc;
+
+}ATS_CO_MSG;
+
+
+//according to message type and size ,we can implement buffer format 
+//and setting of member function .we also need to parse fixed head of this
+//message to get message type ,then to decide to use which processing map.   	
+int ats_co_initATSCOMessage(ATS_CO_MSG *handle,const BYTE *buf,size_t len);
+
+//free member point of message 
+int ats_co_freeATSCOMessage(ATS_CO_MSG *handle);
+
+//log or print ATSCOMSG contents
+int ats_co_unpackATSCOMessage(ATS_CO_MSG *handle);
+int ats_co_refreshDBATSCOMessage(sqlite3 *db,ATS_CO_MSG *handle);
+int ats_co_parseNetHeader(ATS_CO_MSG *handle,BYTE *buf);
+int ats_co_logATSCOMessage(ATS_CO_MSG *handle);
+
+//implemented in ats_co_message.c
+//TrackMsg���Ļ���ת������
+int ats_co_BufferConvertToTrackMsg(const BYTE buf[] ,ats_co_TrackMsg  *message);
+int ats_co_TrackMsgConvertToBuffer(ats_co_TrackMsg *message,  BYTE buf[]);
+
+//TrainStatusMsg���Ļ�����ת������
+int ats_co_BufferConvertToTrainStatusMsg(const BYTE buf[] ,ats_co_TrainStatusMsg *message);
+int ats_co_TrainStatusMsgConvertToBuffer(ats_co_TrainStatusMsg *message, BYTE buf[]);
+
+//TrainEventMsg���Ļ�����ת������
+int ats_co_BufferConvertToTrainEventMsg(const BYTE buf[] ,ats_co_TrainEventMsg  *message);
+int ats_co_TrainEventMsgConvertToBuffer(ats_co_TrainEventMsg *message, BYTE buf[]);
+
+//PlatformMsg���Ļ�����ת������
+int ats_co_BufferConvertToPlatformMsg(const BYTE buf[] ,ats_co_PlatformMsg  *message);
+int ats_co_PlatformMsgConvertToBuffer(ats_co_PlatformMsg *message, BYTE buf[]);
+
+//SwitchMsg���Ļ�����ת������
+int ats_co_BufferConvertToSwitchMsg(const BYTE buf[] ,ats_co_SwitchMsg  *message);
+int ats_co_SwitchMsgConvertToBuffer(ats_co_SwitchMsg *message, BYTE buf[]);
+
+//SignalMsg���Ļ�����ת������
+int ats_co_BufferConvertToSignalMsg(const BYTE buf[] ,ats_co_SignalMsg  *message);
+int ats_co_SignalMsgConvertToBuffer(ats_co_SignalMsg *message, BYTE buf[]);
+
+//AxleCounterMsg���Ļ�����ת������
+int ats_co_BufferConvertToAxleCounterMsg(const BYTE buf[] ,ats_co_AxleCounterMsg  *message);
+int ats_co_AxleCounterMsgConvertToBuffer(ats_co_AxleCounterMsg *message,BYTE buf[]);
+
+//�շ����ĺ���
+int ats_co_SendBuffer(int channel,const BYTE buf[],size_t len);
+int ats_co_ReceiveBuffer(int channel,const BYTE buf[], size_t len);
+
+//��ݱ�������ֶζ�д��ݿ�?��
+//Have been implemented in ats_co_logicaltrack.c
+int ats_co_TrackMsgSetDB(sqlite3 *db, ats_co_TrackMsg *message);
+int ats_co_TrackMsgGetDB(sqlite3 *db, ats_co_TrackMsg *message);
+
+//Have been implemented in ats_co_trainstatus.c
+int ats_co_TrainStatusMsgSetDB(sqlite3 *db, ats_co_TrainStatusMsg *message);
+int ats_co_TrainStatusMsgGetDB(sqlite3 *db, ats_co_TrainStatusMsg *message);
+
+//Have been implemented in ats_co_tain.c
+int ats_co_TrainEventMsgSetDB(sqlite3 *db, ats_co_TrainEventMsg *message);
+int ats_co_TrainEventMsgGetDB(sqlite3 *db, ats_co_TrainEventMsg *message);
+
+//Have been implemented in ats_co_platform.c
+int ats_co_PlatformMsgSetDB(sqlite3 *db, ats_co_PlatformMsg *message);
+int ats_co_PlatformMsgGetDB(sqlite3 *db, ats_co_PlatformMsg *message);
+
+//Have been implemented in ats_co_switch.c
+int ats_co_SwitchMsgSetDB(sqlite3 *db, ats_co_SwitchMsg *message);
+int ats_co_SwitchMsgGetDB(sqlite3 *db, ats_co_SwitchMsg *message);
+
+//Have been implemented in ats_co_signal.c
+int ats_co_SignalMsgSetDB(sqlite3 *db, ats_co_SignalMsg *message);
+int ats_co_SignalMsgGetDB(sqlite3 *db, ats_co_SignalMsg *message);
+
+//Have been implemented in ats_co_axlecounter.c
+int ats_co_AxleCounterMsgSetDB(sqlite3 *db,ats_co_AxleCounterMsg *message);
+int ats_co_AxleCounterMsgGetDB(sqlite3 *db,ats_co_AxleCounterMsg *message);
+
+//int trainEventToAtr(ats_co_TrainEventMsg *message);
+//int tmt_io_UpdateProcess(ats_co_DataForTMT *codatafortmt);
+//
+int ats_co_BufferConvertToCrossingMsg(const BYTE buf[] ,ats_co_CrossingMsg  *message);
+int ats_co_BufferConvertToAreaStatusMsg(const BYTE buf[] ,ats_co_AreaStatusMsg  *message);
+int ats_co_BufferConvertToTrainPositionReport(const BYTE buf[] ,ats_co_TrainPositionReport  *message);
+int ats_co_BufferConvertToRouteStatusMsg(const BYTE buf[] ,ats_co_RouteStatusMsg  *message);
+int ats_co_BufferConvertToErrIndicationMsg(const BYTE buf[] ,ats_co_ErrIndicationMsg  *message);
+//int ats_co_BufferConvertToTrainErrMsg(const BYTE buf[] ,ats_co_TrainErrMsg  *message);
+#endif

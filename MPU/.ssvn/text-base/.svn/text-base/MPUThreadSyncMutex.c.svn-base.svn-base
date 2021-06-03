@@ -1,0 +1,66 @@
+/*
+ 	* MPUReceiverPool.c
+ 	*
+ 	*  Created on: 2011-12-20
+ 	*      Author: w.j
+ */
+
+
+#include "MPU.h"
+
+
+
+int	MPUThreadSyncMutex_create(MPUTheadSyncMutex  *mutex)
+{
+   pthread_mutex_init(mutex->thread_mutex, NULL);
+   pthread_cond_init(mutex->thread_cond, NULL);
+
+   return true;
+}
+
+int	MPUThreadSyncMutex_lock(MPUTheadSyncMutex  *mutex)
+{
+
+	  pthread_mutex_lock(mutex->thread_mutex);
+
+		return true;
+}
+
+int	MPUThreadSyncMutex_unlock(MPUTheadSyncMutex  *mutex)
+{
+
+		pthread_mutex_unlock(mutex->thread_mutex);
+		return true;
+}
+
+int	MPUThreadSyncMutex_trylock(MPUTheadSyncMutex  *mutex)
+{
+
+		pthread_mutex_trylock(mutex->thread_mutex);
+
+
+		return true;
+}
+
+int	MPUThreadSyncMutex_wait(MPUTheadSyncMutex  *mutex)
+{
+
+
+		pthread_cond_wait(mutex->thread_cond,mutex->thread_mutex);
+
+		return true;
+}
+
+
+int	MPUThreadSyncMutex_destroy(MPUTheadSyncMutex  *mutex)
+{
+		pthread_mutex_destroy(mutex->thread_mutex);
+		pthread_cond_destroy(mutex->thread_cond);
+
+		return true;
+}
+
+
+
+
+

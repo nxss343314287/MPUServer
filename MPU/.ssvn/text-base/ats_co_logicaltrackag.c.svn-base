@@ -1,0 +1,189 @@
+/*******************************************************************
+	filename��							ats_co_logicaltrackag.c
+	author��								ss
+	create data��						2011-6-17
+	description��						LogicalTrack���������ʵ��
+	modify history��              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+int ats_co_TrackDataCompare(sqlite3 *db, ats_co_TrackMsg *message)
+{
+		
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	sqlite3_stmt *stmt;
+	char sqlstr[MAX_SQL_STR_LEN];
+	int direction;
+	int lockflag;
+	int freestatus;
+	int status;
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	sprintf(sqlstr, "select Direction,LockFlag,FreeStatus,Status from LogicalTrack where TrackID = '%d'", message->trackid);
+	rc = sqlite3_prepare(db, sqlstr, strlen(sqlstr), &stmt, NULL);
+	if (SQLITE_OK != rc)
+	{
+		printf("SQLerror: %s while running ats_co_TrackDataCompare\n", sqlite3_errmsg(db));
+		return -1;
+	}
+	rc = sqlite3_step(stmt);
+	if (SQLITE_ROW == rc)
+	{
+		direction = sqlite3_column_int(stmt, 0);
+		lockflag = sqlite3_column_int(stmt, 1);
+		freestatus = sqlite3_column_int(stmt, 2);
+		status = sqlite3_column_int(stmt, 3);
+		sqlite3_finalize(stmt);
+	}
+	else
+	{
+		sqlite3_finalize(stmt);
+		return -2; // not find data in SQL
+	}
+
+	if((message->direction != direction)||(message->lockFlag != lockflag)||(message->freeStatus != freestatus)||(message->status != status))   
+	{
+		return 0;
+	}
+	else
+	{
+		return -1;
+	}
+}
+
+/*******************************************************************
+	Function name��					ats_co_log_TrackMsgSetDB
+	description��						���trackid�޸���ݿ����߼������¼
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						message				����				TrackMsg	  ��������						
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����(��������)
+
+*******************************************************************/
+int ats_co_TrackMsgSetDB(sqlite3 *db, ats_co_TrackMsg *message)
+{
+	
+	
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+	ats_co_DataForTMT codatafortmt;
+
+	rc = ats_co_TrackDataCompare(db,message);
+	if(rc == -1)
+	{
+		return 0;
+	}
+    memset(&codatafortmt, 0, sizeof(ats_co_DataForTMT));
+	codatafortmt.elementid = message->trackid;
+	codatafortmt.elementType = message->elementType;
+	codatafortmt.trackdirection = message->direction;
+	codatafortmt.tracklockFlag = message->lockFlag;
+	codatafortmt.trackfreeStatus = message->freeStatus;
+	codatafortmt.trackstatus = message->status;
+	
+	//!!!call process logical
+	tmt_io_UpdateProcess(&codatafortmt);//
+    
+	if((codatafortmt.finish == 1)&&(rc == 0))
+	{
+	//prepare for sql statement	 	 	
+	   memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	   sprintf(sqlstr, "update LogicalTrack set Direction = '%d',LockFlag = '%d',FreeStatus = '%d',Status = '%d' where TrackID = '%d'",
+					 message->direction, message->lockFlag, message->freeStatus, message->status, message->trackid);
+	   rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	   printf("SQL: ret=%d, %s while running ats_co_log_TrackMsgSetDB\n", rc,errMsg);
+	   if (SQLITE_OK != rc)     
+	   {
+		   printf("SQLerror: %s while running ats_co_log_TrackMsgSetDB\n", errMsg);
+		   return -1;
+	   }
+	}
+	return 0;
+}
+
+/*******************************************************************
+	Function name��					ats_co_log_TrackMsgGetDB
+	description��						���trackid��ȡ��ݿ��Ĺ����߼������¼
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						message				����/���		TrackMsg	  ��������												
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����(��������)
+
+*******************************************************************/
+int ats_co_TrackMsgGetDB(sqlite3 *db, ats_co_TrackMsg *message)
+{
+	
+	
+		
+	int rc;
+	//char *errMsg = NULL;
+	sqlite3_stmt *stmt;
+	char sqlstr[MAX_SQL_STR_LEN];
+	
+	
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+	
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	
+	sprintf(sqlstr , "select Direction, LockFlag, FreeStatus, Status from LogicalTrack where TrackID = '%d';",
+						message->trackid);
+						
+	rc = sqlite3_prepare(db, sqlstr, strlen(sqlstr), &stmt, NULL);
+	if(rc != SQLITE_OK) {
+		printf("SQL prepare error: %s\n", sqlite3_errmsg(db));
+	}
+	
+	rc = sqlite3_step(stmt);
+	int ncols = sqlite3_column_count(stmt);
+	
+	
+	if(rc==SQLITE_NOTFOUND)
+	{
+		
+		return SQLITE_NOTFOUND ;		
+	}
+				
+	if(ncols!=1) 
+	{
+		//printf("SQLerror: %s while running ats_co_log_TrackMsgSetDB\n", errMsg);
+		printf("result is not correct one\n");	
+		return -1;	
+	}		
+		
+	while(rc == SQLITE_ROW) {
+							
+					message->direction = sqlite3_column_int(stmt, 0);
+					message->lockFlag  = sqlite3_column_int(stmt, 1);
+					message->freeStatus= sqlite3_column_int(stmt, 2);
+					message->status    = sqlite3_column_int(stmt, 3);
+						
+				  rc = sqlite3_step(stmt);
+	}
+	
+	sqlite3_finalize(stmt);
+				
+	return 0;
+}
+

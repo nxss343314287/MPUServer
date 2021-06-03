@@ -1,0 +1,66 @@
+/*******************************************************************
+	filename：							ats_co_trainstatusag.c
+	author：								ss
+	create data：						2011-6-27
+	description：						TrainStatus表操作方法实现
+	modify history：              
+	author			data(modify)			modify(list)			description
+
+********************************************************************/
+
+#include "ats_co_message.h"
+
+/*******************************************************************
+	Function name：					ats_co_log_TrackMsgSetDB
+	description：						根据trackid修改数据库表的逻辑轨道记录
+	parameter：							输入和输出
+						名称					输入/输出			类型    		描述
+						db						输入				sqlite3*		数据库连接
+						message				输入				TrackMsg	  报文类型						
+	Return value：					成功返回0;失败返回错误码(报文类型)
+
+*******************************************************************/
+int ats_co_TrainStatusMsgSetDB(sqlite3 *db, ats_co_TrainStatusMsg *message)
+{
+			
+	if((db==NULL)||message==NULL)
+	{
+		return -1;
+	}
+		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr, 0, MAX_SQL_STR_LEN);
+	sprintf(sqlstr, "update trainstatus set service = '%d',serial = '%d',line = '%d',driver = '%d',car1 = '%d',car2 = '%d',ebIsApplied = '%d',ebReason = '%d',trainDoorStatus = '%d',controlLevel = '%d',obcuFailure = '%d' where trainindex = '%d'",
+					message->service,message->serial,message->line,message->driver,message->car1,message->car2,message->ebIsApplied,message->ebReason,message->trainDoorStatus,message->controlLevel,message->obcuFailure,message->trainindex);	 	 	
+					
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	printf("SQL: ret=%d, %s while running ats_co_log_TrackMsgSetDB\n", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		printf("SQLerror: %s while running ats_co_log_TrackMsgSetDB\n", errMsg);
+		return -1;
+	}
+	 
+	return 0;
+}
+
+/*******************************************************************
+	Function name：					ats_co_log_TrackMsgGetDB
+	description：						根据trackid获取数据库表的关联逻辑轨道记录
+	parameter：							输入和输出
+						名称					输入/输出			类型    		描述
+						db						输入				sqlite3*		数据库连接
+						message				输入/输出		TrackMsg	  报文类型												
+	Return value：					成功返回0;失败返回错误码(报文类型)
+
+*******************************************************************/
+int ats_co_TrainStatusMsgGetDB(sqlite3 *db, ats_co_TrainStatusMsg *message)
+{
+	
+	return 0;
+}

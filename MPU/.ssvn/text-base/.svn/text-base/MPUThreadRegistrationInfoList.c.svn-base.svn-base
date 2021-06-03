@@ -1,0 +1,26 @@
+/*
+ * MPUThreadRegistrationInfoList.c
+ *
+ *  Created on: 2012-1-4
+ *      Author: root
+ */
+
+#include "MPU.h"
+
+int MPUThreadRegistrationInfoList_create(MPUThreadRegistrationInfoList *list)
+{
+
+		//list->header
+		//list->sThreadRegistrationInfoMutex
+		//list->tailer
+
+
+		return true;
+}
+
+int MPUThreadRegistrationInfoList_free(MPUThreadRegistrationInfoList *list)
+{
+
+
+		return true;
+}

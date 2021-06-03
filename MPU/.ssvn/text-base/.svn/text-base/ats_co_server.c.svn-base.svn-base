@@ -1,0 +1,275 @@
+/*******************************************************************
+	filename��										ats_co_server.c
+	author��											W.J.
+	create data��									05-Aug-2011
+	description��									COģ������ܵ���FIFO�����ͨ�źͱ��Ĵ����ʵ��	
+	detailed description��                     
+  warning��                   
+	modify history��              
+	author			data(modify)			modify(list)			description
+********************************************************************/
+
+#include "ats_co_server.h"
+#include <log4c.h>
+#include "../Adapter/adapter_co.h"
+
+const char *pipe_name="tmp/net2io.fifo";
+
+/*******************************************************************
+	Function name��					ats_co_MsgHeaderSetDB
+	description��						�����Ϣ�壬�Ѽ�¼д����ݿ��
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						msg						����				ATS_CO_MSG*	��ʽ���ı���
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����
+
+*******************************************************************/
+int ats_co_MsgHeaderSetDB(sqlite3 *db, ATS_CO_MSG *msg)
+{		
+	if((db==NULL)||msg==NULL)
+	{
+		return -1;
+	}		
+	int rc;
+	char *errMsg = NULL;
+	char sqlstr[MAX_SQL_STR_LEN];
+
+	//prepare for sql statement	 	 	
+	memset(sqlstr,0, MAX_SQL_STR_LEN);
+											
+	sprintf(sqlstr, "REPLACE INTO hostlist(h1index,SrcNo,DestNo,FrameNum,Protocol,InoutFlag) \
+	VALUES('%d','%d','%d','%d','%d','%d')",msg->header.seqno,msg->header.srcno,msg->header.destno,
+	msg->header.seqno,msg->header.protocoltype,	msg->header.mainorbak);
+															
+	rc = sqlite3_exec(db, sqlstr, 0, 0, &errMsg);
+	
+	DLOG(cat,"SQL: ret=%d, %s while running ats_co_MsgHeaderSetDB", rc,errMsg);
+	if (SQLITE_OK != rc)     
+	{
+		ELOG(cat,"SQLerror: %s while running ats_co_MsgHeaderSetDB", errMsg);
+		return -1;
+	}	 			
+	return 0;
+}
+
+/*******************************************************************
+	Function name��					ats_co_MsgUnpack
+	description��						ת�������ֽڵ���ݿ���¼�����Ҹ��µ���ݿ����
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						packet				����				BYTE *			��ʽ���ı��ĵ�ָ��
+						len						����				size_t			���ĳ���
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����
+
+*******************************************************************/
+int ats_co_MsgUnpack(sqlite3 *db, BYTE *packet , size_t len)
+{		
+	//we think that buffer is serial bytes received,and length is PACKET_LEN.
+	//in fact,if we received message from a pipe connected to IO module,we can
+	//get the length of message .
+	//unfortunitely,when we read from a pipe , perhaps we don't know how to read buffer,
+	//but it isn't the object of this task. here we just have known buffer and length.
+	ATS_CO_MSG  *this_message ;
+	
+	this_message=malloc(sizeof(ATS_CO_MSG));
+	memset(this_message,0,sizeof(ATS_CO_MSG));
+			 	
+	//init member of message
+	if(ats_co_initATSCOMessage(this_message,packet,len)==false)
+	{
+  		ELOG(cat,"init ATSCOMessage error");	
+			return false;
+	}
+
+	ats_co_parseNetHeader(this_message,packet);
+				
+	DLOG(cat,"h1index,SrcNo,DestNo,FrameNum,Protocol,InoutFlag=(%d,%d,%d,%d,%d,%d)",
+	this_message->header.seqno,this_message->header.srcno,this_message->header.destno,
+	this_message->header.seqno,this_message->header.protocoltype,this_message->header.mainorbak);
+	
+	if((this_message->header.destmodule) > 200)
+	{
+		if((this_message->header.protocoltype) == 7)
+		{
+			//网络状态 断－>通 时调用加载报文接口
+			adapter_co_send_loadRequest(this_message->header.destno,this_message->header.destmodule,1,1,1,1);
+		}
+		return true;
+
+	}
+	ats_co_MsgHeaderSetDB(db,this_message);
+	
+	//now ,all of things are ready,so we can start to control progress of parsing...
+	//unpack message packet 
+	ats_co_unpackATSCOMessage(this_message);
+	
+	//then refresh them to database tables 	
+	if(this_message->setDBFunc!=NULL)
+	ats_co_refreshDBATSCOMessage(db,this_message);	
+	
+	//to call logical processor
+	if(this_message->logicalMsgFunc!=NULL)
+		this_message->logicalMsgFunc(this_message->message);
+
+	//all things are over ,free all of resources 
+	ats_co_freeATSCOMessage(this_message);
+			
+	return true;
+}
+
+
+/*******************************************************************
+	Function name��					ats_co_MsgPack
+	description��						����������ݣ�����ݿ��ȡ��¼��ݲ���ת�������ĸ�ʽ
+	parameter��							��������
+						���					����/���			����    		����
+						db						����				sqlite3*		��ݿ�����
+						packet				����/���		BYTE *			���ĸ�ʽ�洢�ռ�ָ��
+						len						����				size_t			���ĳ���
+	Return value��					�ɹ�����0;ʧ�ܷ��ش�����
+
+*******************************************************************/
+int ats_co_MsgPack(sqlite3 *db, BYTE *packet , size_t len)
+{		
+	return true;
+}
+
+int FIFOManager(sqlite3 *db,BYTE *buf, size_t len)
+{
+	int fp;
+	int i=0;		
+	int s;	
+
+	fd_set fds;
+	
+			
+	if(fork()==0)
+	{
+		
+	if((fp=open(pipe_name,O_RDWR))<0)
+	{			
+		ELOG(cat,"server open FIFO error ,fp=%d",fp);
+		return false;
+	}	
+			
+
+	//waiting for read
+	/*
+	while(1)
+	{
+		FD_ZERO(&fds);
+		FD_SET(fp,&fds);
+		
+		i=select(FD_SETSIZE,&fds,(fd_set*)0,(fd_set *)0,(struct timeval *)NULL);
+		
+		if(i<1) 
+		{ 
+			DLOG(cat,"Select FIFO error ,i=%d",i);
+		}
+		
+		if(FD_ISSET(fp,&fds))
+		{
+				int le=read(fp,buf,512);
+			
+				ELOG(cat,"received buffer size=%d",le);	
+				
+				if (le>0)
+				{																	
+					ats_co_MsgUnpack(db,buf,le);
+				}
+		}
+	}
+	*/
+	while(1)
+	{
+		
+			int le=read(fp,buf,PACKET_LEN+MSG_HEADER_LEN);
+								
+			if (le>0)
+			{										
+					DLOG(cat,"received buffer size=%d",le);								
+					ats_co_MsgUnpack(db,buf,le);
+			}
+		
+	}
+	
+	close(fp);
+	}
+	return true;
+}
+
+int FIFOManagerStart(sqlite3 *db,BYTE *buf, size_t len)
+{
+int fp;
+int s;
+if((s=mkfifo(pipe_name,0666))<0)
+{
+ELOG(cat,"create file error,s=%d",s);
+}
+if((fp=open(pipe_name,O_RDWR))<0)
+{
+ELOG(cat,"server open FIFO error ,fp=%d",fp);
+return false;
+}
+int count = 0;
+int le= 0;
+while(1)
+{
+    if(count<=MAX_MSG_NUM)
+    {
+     le=read(fp,buf,PACKET_LEN+MSG_HEADER_LEN);
+    }
+if ((le>0)&&(count<=MAX_MSG_NUM))
+{
+DLOG(cat,"received buffer size=%d",le);
+ats_co_MsgUnpack(db,buf,le);
+count++;
+}
+else
+{
+break;
+}
+}
+close(fp);
+return true;
+}
+
+void coReceiver(sqlite3 *db)
+{
+	//to init a service process for monitor FIFO pipe. we suspend that
+	//there are many bytes of packets in pipe,we read all of them
+	//at one time.how to parse them correctly? we can search head of
+	//packet , then parse the head,and do the analyst of packet throughtly. 
+	
+	int rc;
+
+	BYTE  *buffer;
+	//sqlite3 *db;
+  DLOG(cat, "begin ats_co_server");
+
+	/*rc = sqlite3_open(DB_NAME, &db);
+	if (0 != rc)
+	{
+  	ELOG(cat,"SQLerror: %s",sqlite3_errmsg(db));
+		sqlite3_close(db);
+		exit(-1);
+	}*/
+	
+	buffer=malloc(PACKET_LEN+MSG_HEADER_LEN);
+	memset(buffer,0,PACKET_LEN+MSG_HEADER_LEN);
+
+ 	int len=PACKET_LEN+MSG_HEADER_LEN;
+	//demo procedure of message received 
+ 	FIFOManagerStart(db,buffer,len);
+
+	//free database connection
+	//sqlite3_close(db);
+
+	
+	//now , do a test for return a result from datatabase query 
+	//exit(0);
+	return;
+}
+
